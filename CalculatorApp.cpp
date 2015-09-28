@@ -6,13 +6,13 @@
 #include "Resource.h"
 
 //
-// ÉGÉìÉgÉäÅ[É|ÉCÉìÉg
+// „Ç®„É≥„Éà„É™„Éº„Éù„Ç§„É≥„Éà
 //
-int WINAPI WinMain( HINSTANCE, HINSTANCE, LPSTR, int )
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-    HeapSetInformation(NULL, HeapEnableTerminationOnCorruption, NULL, 0);
-    if (SUCCEEDED(CoInitialize(NULL)))
-    {
+	HeapSetInformation(NULL, HeapEnableTerminationOnCorruption, NULL, 0);
+	if (SUCCEEDED(CoInitialize(NULL)))
+	{
 		{
 			CalculatorApp app;
 			if (SUCCEEDED(app.Initialize()))
@@ -20,72 +20,72 @@ int WINAPI WinMain( HINSTANCE, HINSTANCE, LPSTR, int )
 				app.RunMessageLoop();
 			}
 		}
-        CoUninitialize();
-    }
-    return 0;
+		CoUninitialize();
+	}
+	return 0;
 }
 
 //
-// ÉÅÉìÉoÅ[ïœêîÇÃèâä˙âª
+// „É°„É≥„Éê„ÉºÂ§âÊï∞„ÅÆÂàùÊúüÂåñ
 //
 CalculatorApp::CalculatorApp() :
-    m_hwnd(NULL),
-    m_pD2DFactory(NULL),
-    m_pDWriteFactory(NULL),
-    m_pRenderTarget(NULL),
-    m_pTextFormat(NULL),
-	m_pTextBrush(NULL),
-	m_pDispBrush(NULL),
-	m_bCapture(FALSE),
-	m_lpszText(NULL),
-	m_bInputOperand(FALSE),
-	m_bInputPoint(FALSE),
-	m_bEqualed(TRUE),
-	m_bError(FALSE),
-	m_pBitmap(NULL)
+m_hwnd(NULL),
+m_pD2DFactory(NULL),
+m_pDWriteFactory(NULL),
+m_pRenderTarget(NULL),
+m_pTextFormat(NULL),
+m_pTextBrush(NULL),
+m_pDispBrush(NULL),
+m_bCapture(FALSE),
+m_lpszText(NULL),
+m_bInputOperand(FALSE),
+m_bInputPoint(FALSE),
+m_bEqualed(TRUE),
+m_bError(FALSE),
+m_pBitmap(NULL)
 {
 }
 
 //
-// ÉäÉ\Å[ÉXÇÃâï˙
+// „É™„ÇΩ„Éº„Çπ„ÅÆËß£Êîæ
 //
 CalculatorApp::~CalculatorApp()
 {
-    SafeRelease(&m_pD2DFactory);
-    SafeRelease(&m_pDWriteFactory);
-    SafeRelease(&m_pRenderTarget);
-    SafeRelease(&m_pTextFormat);
+	SafeRelease(&m_pD2DFactory);
+	SafeRelease(&m_pDWriteFactory);
+	SafeRelease(&m_pRenderTarget);
+	SafeRelease(&m_pTextFormat);
 	SafeRelease(&m_pTextBrush);
 	SafeRelease(&m_pDispBrush);
 	SafeRelease(&m_pBitmap);
 }
 
 //
-// èâä˙âªÇ∆ÉEÉBÉìÉhÉEÇÃçÏê¨
-// ÉfÉoÉCÉXÇ…àÀë∂ÇµÇ»Ç¢ÉäÉ\Å[ÉX
+// ÂàùÊúüÂåñ„Å®„Ç¶„Ç£„É≥„Éâ„Ç¶„ÅÆ‰ΩúÊàê
+// „Éá„Éê„Ç§„Çπ„Å´‰æùÂ≠ò„Åó„Å™„ÅÑ„É™„ÇΩ„Éº„Çπ
 //
 HRESULT CalculatorApp::Initialize()
 {
-    HRESULT hr = CreateDeviceIndependentResources();
-    if (SUCCEEDED(hr))
-    {
-        // ÉEÉBÉìÉhÉEÉNÉâÉXÇÃìoò^
-        WNDCLASSEX wcex = { sizeof(WNDCLASSEX) };
+	HRESULT hr = CreateDeviceIndependentResources();
+	if (SUCCEEDED(hr))
+	{
+		// „Ç¶„Ç£„É≥„Éâ„Ç¶„ÇØ„É©„Çπ„ÅÆÁôªÈå≤
+		WNDCLASSEX wcex = { sizeof(WNDCLASSEX) };
 		wcex.style = CS_DROPSHADOW /*CS_HREDRAW | CS_VREDRAW*/;
-        wcex.lpfnWndProc   = CalculatorApp::WndProc;
-        wcex.cbClsExtra    = 0;
-        wcex.cbWndExtra    = sizeof(LONG_PTR);
-        wcex.hInstance     = HINST_THISCOMPONENT;
-        wcex.hbrBackground = NULL;
-        wcex.lpszMenuName  = NULL;
+		wcex.lpfnWndProc = CalculatorApp::WndProc;
+		wcex.cbClsExtra = 0;
+		wcex.cbWndExtra = sizeof(LONG_PTR);
+		wcex.hInstance = HINST_THISCOMPONENT;
+		wcex.hbrBackground = NULL;
+		wcex.lpszMenuName = NULL;
 		wcex.hIcon = LoadIcon(HINST_THISCOMPONENT, (LPCTSTR)IDI_ICON1);
-        wcex.hCursor       = LoadCursor(NULL, IDC_ARROW);
-        wcex.lpszClassName = L"CalculatorClass";
+		wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
+		wcex.lpszClassName = L"CalculatorClass";
 
-        RegisterClassEx(&wcex);
+		RegisterClassEx(&wcex);
 
-        FLOAT dpiX, dpiY;
-        m_pD2DFactory->GetDesktopDpi(&dpiX, &dpiY);
+		FLOAT dpiX, dpiY;
+		m_pD2DFactory->GetDesktopDpi(&dpiX, &dpiY);
 
 		RECT rect;
 		SetRect(&rect, 0, 0, static_cast<UINT>(ceil(640.f * dpiX / 96.f)), static_cast<UINT>(ceil(280.f * dpiY / 96.f)));
@@ -93,102 +93,102 @@ HRESULT CalculatorApp::Initialize()
 
 		m_hwnd = CreateWindowEx(
 			WS_EX_LAYERED,
-            L"CalculatorClass",
-            L"ìdëÏ+",
+			L"CalculatorClass",
+			L"ÈõªÂçì+",
 			WS_POPUP | WS_SYSMENU | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_BORDER,
-            CW_USEDEFAULT,
-            0,
-            rect.right - rect.left,
-            rect.bottom - rect.top,
-            NULL,
-            NULL,
-            HINST_THISCOMPONENT,
-            this
-            );
-        hr = m_hwnd ? S_OK : E_FAIL;
-        if (SUCCEEDED(hr))
-        {
+			CW_USEDEFAULT,
+			0,
+			rect.right - rect.left,
+			rect.bottom - rect.top,
+			NULL,
+			NULL,
+			HINST_THISCOMPONENT,
+			this
+			);
+		hr = m_hwnd ? S_OK : E_FAIL;
+		if (SUCCEEDED(hr))
+		{
 			SetLayeredWindowAttributes(m_hwnd, RGB(255, 0, 0), 248, LWA_COLORKEY | LWA_ALPHA);
 
-            ShowWindow(m_hwnd, SW_SHOWNORMAL);
-            UpdateWindow(m_hwnd);
-        }
-    }
+			ShowWindow(m_hwnd, SW_SHOWNORMAL);
+			UpdateWindow(m_hwnd);
+		}
+	}
 
-    return hr;
+	return hr;
 }
 
 //
-// ÉoÉCÉìÉhÇ≥ÇÍÇƒÇ¢Ç»Ç¢ÉäÉ\Å[ÉXÇÃçÏê¨ÅiÉtÉHÉìÉgÇ»Ç«Åj
+// „Éê„Ç§„É≥„Éâ„Åï„Çå„Å¶„ÅÑ„Å™„ÅÑ„É™„ÇΩ„Éº„Çπ„ÅÆ‰ΩúÊàêÔºà„Éï„Ç©„É≥„Éà„Å™„Å©Ôºâ
 //
 HRESULT CalculatorApp::CreateDeviceIndependentResources()
 {
-    static const WCHAR msc_fontName[] = L"Inconsolata";
-    static const FLOAT msc_fontSize = 32;
-    HRESULT hr;
+	static const WCHAR msc_fontName[] = L"Inconsolata";
+	static const FLOAT msc_fontSize = 32;
+	HRESULT hr;
 
-    // Direct2D factory ÇçÏê¨
-    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &m_pD2DFactory);
+	// Direct2D factory „Çí‰ΩúÊàê
+	hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &m_pD2DFactory);
 
-    if (SUCCEEDED(hr))
-    {
-        // DirectWrite factory ÇçÏê¨
+	if (SUCCEEDED(hr))
+	{
+		// DirectWrite factory „Çí‰ΩúÊàê
 		hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(m_pDWriteFactory), reinterpret_cast<IUnknown **>(&m_pDWriteFactory));
-    }
-
-    if (SUCCEEDED(hr))
-    {
-        // Create a DirectWrite text format object.
-        hr = m_pDWriteFactory->CreateTextFormat(
-            msc_fontName,
-            NULL,
-            DWRITE_FONT_WEIGHT_NORMAL,
-            DWRITE_FONT_STYLE_NORMAL,
-			DWRITE_FONT_STRETCH_NORMAL,
-            msc_fontSize,
-            L"", //locale
-            &m_pTextFormat
-            );
-    }
-
-    if (SUCCEEDED(hr))
-    {
-        // Center the text horizontally and vertically.
-		m_pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING); // âEäÒÇπ
-		m_pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR); // è„äÒÇπ
 	}
 
-    return hr;
+	if (SUCCEEDED(hr))
+	{
+		// Create a DirectWrite text format object.
+		hr = m_pDWriteFactory->CreateTextFormat(
+			msc_fontName,
+			NULL,
+			DWRITE_FONT_WEIGHT_NORMAL,
+			DWRITE_FONT_STYLE_NORMAL,
+			DWRITE_FONT_STRETCH_NORMAL,
+			msc_fontSize,
+			L"", //locale
+			&m_pTextFormat
+			);
+	}
+
+	if (SUCCEEDED(hr))
+	{
+		// Center the text horizontally and vertically.
+		m_pTextFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING); // Âè≥ÂØÑ„Åõ
+		m_pTextFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR); // ‰∏äÂØÑ„Åõ
+	}
+
+	return hr;
 }
 
 //
-//  ÉfÉoÉCÉXå≈óLÇÃÉäÉ\Å[ÉXÇçÏê¨
+//  „Éá„Éê„Ç§„ÇπÂõ∫Êúâ„ÅÆ„É™„ÇΩ„Éº„Çπ„Çí‰ΩúÊàê
 //
 HRESULT CalculatorApp::CreateDeviceResources()
 {
-    HRESULT hr = S_OK;
+	HRESULT hr = S_OK;
 
-    if (!m_pRenderTarget)
-    {
+	if (!m_pRenderTarget)
+	{
 
-        RECT rc;
-        GetClientRect(m_hwnd, &rc);
+		RECT rc;
+		GetClientRect(m_hwnd, &rc);
 
-        D2D1_SIZE_U size = D2D1::SizeU(
-            rc.right - rc.left,
-            rc.bottom - rc.top
-            );
+		D2D1_SIZE_U size = D2D1::SizeU(
+			rc.right - rc.left,
+			rc.bottom - rc.top
+			);
 
-        // Create a Direct2D render target.
-        hr = m_pD2DFactory->CreateHwndRenderTarget(
-            D2D1::RenderTargetProperties(),
-            D2D1::HwndRenderTargetProperties(m_hwnd, size),
-            &m_pRenderTarget
-            );
+		// Create a Direct2D render target.
+		hr = m_pD2DFactory->CreateHwndRenderTarget(
+			D2D1::RenderTargetProperties(),
+			D2D1::HwndRenderTargetProperties(m_hwnd, size),
+			&m_pRenderTarget
+			);
 
-        if (SUCCEEDED(hr))
-        {
-            // Create a black brush.
+		if (SUCCEEDED(hr))
+		{
+			// Create a black brush.
 			hr = m_pRenderTarget->CreateSolidColorBrush(
 				TEXTCOLOR,
 				&m_pTextBrush
@@ -199,54 +199,54 @@ HRESULT CalculatorApp::CreateDeviceResources()
 				);
 		}
 
-    }
+	}
 
-    return hr;
+	return hr;
 }
 
 
 //
-//  ÉfÉoÉCÉXå≈óLÇÃÉäÉ\Å[ÉXÇäJï˙Ç∑ÇÈ
+//  „Éá„Éê„Ç§„ÇπÂõ∫Êúâ„ÅÆ„É™„ÇΩ„Éº„Çπ„ÇíÈñãÊîæ„Åô„Çã
 //
 void CalculatorApp::DiscardDeviceResources()
 {
-    SafeRelease(&m_pRenderTarget);
+	SafeRelease(&m_pRenderTarget);
 	SafeRelease(&m_pTextBrush);
 	SafeRelease(&m_pDispBrush);
 }
 
 //
-// ÉÅÉCÉìÉEÉBÉìÉhÉEÇÃÉÅÉbÉZÅ[ÉWÉãÅ[Év
+// „É°„Ç§„É≥„Ç¶„Ç£„É≥„Éâ„Ç¶„ÅÆ„É°„ÉÉ„Çª„Éº„Ç∏„É´„Éº„Éó
 //
 void CalculatorApp::RunMessageLoop()
 {
-    MSG msg;
+	MSG msg;
 
-    while (GetMessage(&msg, NULL, 0, 0))
-    {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
+	while (GetMessage(&msg, NULL, 0, 0))
+	{
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
 }
 
 
 //
-// âÊñ ï`âÊ
+// ÁîªÈù¢ÊèèÁîª
 //
 HRESULT CalculatorApp::OnRender()
 {
-    HRESULT hr;
+	HRESULT hr;
 
-    hr = CreateDeviceResources();
+	hr = CreateDeviceResources();
 
-    if (SUCCEEDED(hr))
-    {
-        // Retrieve the size of the render target.
-        D2D1_SIZE_F renderTargetSize = m_pRenderTarget->GetSize();
+	if (SUCCEEDED(hr))
+	{
+		// Retrieve the size of the render target.
+		D2D1_SIZE_F renderTargetSize = m_pRenderTarget->GetSize();
 
-        m_pRenderTarget->BeginDraw();
+		m_pRenderTarget->BeginDraw();
 
-        m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+		m_pRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
 
 		m_pRenderTarget->Clear(BACKCOLOR);
 
@@ -261,46 +261,46 @@ HRESULT CalculatorApp::OnRender()
 			0,
 			28,
 			640,
-			28+48
+			28 + 48
 			);
 		m_pRenderTarget->FillRectangle(&rectangle2, m_pDispBrush);
 
-        m_pRenderTarget->DrawText(
+		m_pRenderTarget->DrawText(
 			m_lpszText,
 			lstrlen(m_lpszText),
-            m_pTextFormat,
-			D2D1::RectF(OUTOFFSET, OUTOFFSET * 4 + 4, renderTargetSize.width - 2 * OUTOFFSET, renderTargetSize.height - 8 * OUTOFFSET- 8),
-            m_pTextBrush
-            );
+			m_pTextFormat,
+			D2D1::RectF(OUTOFFSET, OUTOFFSET * 4 + 4, renderTargetSize.width - 2 * OUTOFFSET, renderTargetSize.height - 8 * OUTOFFSET - 8),
+			m_pTextBrush
+			);
 
-        hr = m_pRenderTarget->EndDraw();
+		hr = m_pRenderTarget->EndDraw();
 
-        if (hr == D2DERR_RECREATE_TARGET)
-        {
-            hr = S_OK;
-            DiscardDeviceResources();
-        }
-    }
+		if (hr == D2DERR_RECREATE_TARGET)
+		{
+			hr = S_OK;
+			DiscardDeviceResources();
+		}
+	}
 
-    return hr;
+	return hr;
 }
 
 //
-// ÉEÉBÉìÉhÉEÇ™ÉäÉTÉCÉYÇ≥ÇÍÇΩÇ∆Ç´
+// „Ç¶„Ç£„É≥„Éâ„Ç¶„Åå„É™„Çµ„Ç§„Ç∫„Åï„Çå„Åü„Å®„Åç
 //
 void CalculatorApp::OnResize(UINT width, UINT height)
 {
-    if (m_pRenderTarget)
-    {
-        D2D1_SIZE_U size;
-        size.width = width;
-        size.height = height;
-        m_pRenderTarget->Resize(size);
-    }
+	if (m_pRenderTarget)
+	{
+		D2D1_SIZE_U size;
+		size.width = width;
+		size.height = height;
+		m_pRenderTarget->Resize(size);
+	}
 }
 
 //
-// ÇQì_ÇÃãóó£ÇåvéZ
+// ÔºíÁÇπ„ÅÆË∑ùÈõ¢„ÇíË®àÁÆó
 //
 double GetDis(const LPPOINT a, const LPPOINT b)
 {
@@ -310,25 +310,25 @@ double GetDis(const LPPOINT a, const LPPOINT b)
 }
 
 //
-// ÉEÉBÉìÉhÉEÉÅÉbÉZÅ[ÉWÉnÉìÉhÉâÅ[
+// „Ç¶„Ç£„É≥„Éâ„Ç¶„É°„ÉÉ„Çª„Éº„Ç∏„Éè„É≥„Éâ„É©„Éº
 //
 LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    LRESULT result = 0;
+	LRESULT result = 0;
 
-    if (message == WM_CREATE)
-    {
+	if (message == WM_CREATE)
+	{
 		ImmAssociateContext(hwnd, 0);
 
-        LPCREATESTRUCT pcs = (LPCREATESTRUCT)lParam;
-        CalculatorApp *pCalculatorApp = (CalculatorApp *)pcs->lpCreateParams;
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, PtrToUlong(pCalculatorApp));
+		LPCREATESTRUCT pcs = (LPCREATESTRUCT)lParam;
+		CalculatorApp *pCalculatorApp = (CalculatorApp *)pcs->lpCreateParams;
+		SetWindowLongPtrW(hwnd, GWLP_USERDATA, PtrToUlong(pCalculatorApp));
 
 		pCalculatorApp->m_lpszText = (LPTSTR)GlobalAlloc(GMEM_FIXED, sizeof(TCHAR)*(2));
 		pCalculatorApp->m_lpszText[0] = TEXT('0');
 		pCalculatorApp->m_lpszText[1] = 0;
 
-		//// É{É^ÉìÇçÏê¨
+		//// „Éú„Çø„É≥„Çí‰ΩúÊàê
 		for (int i = 0; i < BUTTON_MAX; i++)
 		{
 			if (i == BUTTON_CLOSE)
@@ -342,84 +342,84 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 		}
 
 		pCalculatorApp->m_Border1.CreateBorder(28, hwnd, ((LPCREATESTRUCT)(lParam))->hInstance);// button[i].szText, &button[i].rect, hwnd, (HMENU)button[i].id, ((LPCREATESTRUCT)(lParam))->hInstance, IDB_CLOSE_NORMAL, IDB_CLOSE_PRESS, IDB_CLOSE_CURSOR, IDB_CLOSE_NORMAL);
-		pCalculatorApp->m_Border2.CreateBorder(28+48, hwnd, ((LPCREATESTRUCT)(lParam))->hInstance);// button[i].szText, &button[i].rect, hwnd, (HMENU)button[i].id, ((LPCREATESTRUCT)(lParam))->hInstance, IDB_CLOSE_NORMAL, IDB_CLOSE_PRESS, IDB_CLOSE_CURSOR, IDB_CLOSE_NORMAL);
+		pCalculatorApp->m_Border2.CreateBorder(28 + 48, hwnd, ((LPCREATESTRUCT)(lParam))->hInstance);// button[i].szText, &button[i].rect, hwnd, (HMENU)button[i].id, ((LPCREATESTRUCT)(lParam))->hInstance, IDB_CLOSE_NORMAL, IDB_CLOSE_PRESS, IDB_CLOSE_CURSOR, IDB_CLOSE_NORMAL);
 
 		//SetTimer(hwnd, 0x1234, 1, NULL);
-			
-        result = 1;
-    }
-    else
-    {
+
+		result = 1;
+	}
+	else
+	{
 		CalculatorApp *pCalculatorApp = reinterpret_cast<CalculatorApp *>(static_cast<LONG_PTR>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)));
-        bool wasHandled = false;
-        if (pCalculatorApp)
-        {
-            switch (message)
-            {
-			//case WM_TIMER:
-			//	{
-			//	//KillTimer(hwnd, 0x1234);
-			//		POINT point1;
-			//		GetCursorPos(&point1);
-			//		RECT rect;
-			//		GetWindowRect(hwnd, &rect);
-			//		POINT point2 = { (rect.right + rect.left)/2.0, (rect.bottom + rect.top)/2.0 };
-			//		const double dDistance= GetDis(&point1, &point2);
-			//		if (dDistance > rect.right - rect.left)
-			//		{
-			//			SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), (BYTE)128, LWA_COLORKEY | LWA_ALPHA);
-			//		}
-			//		else
-			//		{
-			//			SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), (BYTE)(256.0 - dDistance / (rect.right - rect.left) * 128.0), LWA_COLORKEY | LWA_ALPHA);
-			//		}
-			//		//SetTimer(hwnd, 0x1234, 1, NULL);
-			//	}
-			//	break;
+		bool wasHandled = false;
+		if (pCalculatorApp)
+		{
+			switch (message)
+			{
+				//case WM_TIMER:
+				//	{
+				//	//KillTimer(hwnd, 0x1234);
+				//		POINT point1;
+				//		GetCursorPos(&point1);
+				//		RECT rect;
+				//		GetWindowRect(hwnd, &rect);
+				//		POINT point2 = { (rect.right + rect.left)/2.0, (rect.bottom + rect.top)/2.0 };
+				//		const double dDistance= GetDis(&point1, &point2);
+				//		if (dDistance > rect.right - rect.left)
+				//		{
+				//			SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), (BYTE)128, LWA_COLORKEY | LWA_ALPHA);
+				//		}
+				//		else
+				//		{
+				//			SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), (BYTE)(256.0 - dDistance / (rect.right - rect.left) * 128.0), LWA_COLORKEY | LWA_ALPHA);
+				//		}
+				//		//SetTimer(hwnd, 0x1234, 1, NULL);
+				//	}
+				//	break;
 
-			//case WM_PRINTCLIENT:
-			//	//hdc = (HDC)wp;
-			//	//hBmp = (HBITMAP)LoadImage(hInst,
-			//	//	"MYBMP",
-			//	//	IMAGE_BITMAP,
-			//	//	0, 0,
-			//	//	LR_DEFAULTCOLOR);
-			//	//GetObject(hBmp, (int)sizeof(BITMAP), &bmp_info);
-			//	//wx = bmp_info.bmWidth;
-			//	//wy = bmp_info.bmHeight;
-			//	//hdc_mem = CreateCompatibleDC(hdc);
-			//	//SelectObject(hdc_mem, hBmp);
-			//	//BitBlt(hdc, 0, 0, wx, wy, hdc_mem, 0, 0, SRCCOPY);
-			//	//DeleteObject(hBmp);
-			//	//DeleteDC(hdc_mem);
-			//	break;
-            case WM_SIZE:
-                {
-                    const UINT width = LOWORD(lParam);
-                    const UINT height = HIWORD(lParam);
-                    pCalculatorApp->OnResize(width, height);
-                }
-                wasHandled = true;
-                result = 0;
-                break;
+				//case WM_PRINTCLIENT:
+				//	//hdc = (HDC)wp;
+				//	//hBmp = (HBITMAP)LoadImage(hInst,
+				//	//	"MYBMP",
+				//	//	IMAGE_BITMAP,
+				//	//	0, 0,
+				//	//	LR_DEFAULTCOLOR);
+				//	//GetObject(hBmp, (int)sizeof(BITMAP), &bmp_info);
+				//	//wx = bmp_info.bmWidth;
+				//	//wy = bmp_info.bmHeight;
+				//	//hdc_mem = CreateCompatibleDC(hdc);
+				//	//SelectObject(hdc_mem, hBmp);
+				//	//BitBlt(hdc, 0, 0, wx, wy, hdc_mem, 0, 0, SRCCOPY);
+				//	//DeleteObject(hBmp);
+				//	//DeleteDC(hdc_mem);
+				//	break;
+			case WM_SIZE:
+			{
+				const UINT width = LOWORD(lParam);
+				const UINT height = HIWORD(lParam);
+				pCalculatorApp->OnResize(width, height);
+			}
+			wasHandled = true;
+			result = 0;
+			break;
 
-            case WM_DISPLAYCHANGE:
-                {
-                    InvalidateRect(hwnd, NULL, FALSE);
-                }
-                wasHandled = true;
-                result = 0;
-                break;
+			case WM_DISPLAYCHANGE:
+			{
+				InvalidateRect(hwnd, NULL, FALSE);
+			}
+			wasHandled = true;
+			result = 0;
+			break;
 
-            case WM_PAINT:
-                {
-                    pCalculatorApp->OnRender();
+			case WM_PAINT:
+			{
+				pCalculatorApp->OnRender();
 
-                    ValidateRect(hwnd, NULL);
-                }
-                wasHandled = true;
-                result = 0;
-                break;
+				ValidateRect(hwnd, NULL);
+			}
+			wasHandled = true;
+			result = 0;
+			break;
 
 
 			case WM_COMMAND:
@@ -435,17 +435,17 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 				case BUTTON_7:
 				case BUTTON_8:
 				case BUTTON_9:
+				{
+					if (pCalculatorApp->m_bError || pCalculatorApp->m_bEqualed)
 					{
-						if (pCalculatorApp->m_bError || pCalculatorApp->m_bEqualed)
-						{
-							Reset(&pCalculatorApp->m_lpszText);
-							pCalculatorApp->m_bEqualed = 0;
-							pCalculatorApp->m_bError = 0;
-						}
-						AddText(&pCalculatorApp->m_lpszText, button[LOWORD(wParam)].szText);
-						pCalculatorApp->m_bInputOperand = 0;
+						Reset(&pCalculatorApp->m_lpszText);
+						pCalculatorApp->m_bEqualed = 0;
+						pCalculatorApp->m_bError = 0;
 					}
-					break;
+					AddText(&pCalculatorApp->m_lpszText, button[LOWORD(wParam)].szText);
+					pCalculatorApp->m_bInputOperand = 0;
+				}
+				break;
 				case BUTTON_LEFT:
 				case BUTTON_RIGHT:
 					if (!pCalculatorApp->m_bError)
@@ -487,7 +487,7 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 					{
 						if (pCalculatorApp->m_bEqualed)
 						{
-							pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, sizeof(TCHAR)* 2, GMEM_MOVEABLE);
+							pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, sizeof(TCHAR) * 2, GMEM_MOVEABLE);
 							pCalculatorApp->m_lpszText[0] = TEXT('0');
 							pCalculatorApp->m_lpszText[1] = 0;
 							pCalculatorApp->m_bEqualed = 0;
@@ -507,7 +507,7 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 						{
 							pCalculatorApp->m_bError = 1;
 							GlobalFree(pCalculatorApp->m_lpszText);
-							pCalculatorApp->m_lpszText = (LPTSTR)GlobalAlloc(0, sizeof(TCHAR)* 6);
+							pCalculatorApp->m_lpszText = (LPTSTR)GlobalAlloc(0, sizeof(TCHAR) * 6);
 							lstrcpy(pCalculatorApp->m_lpszText, TEXT("ERORR"));
 
 						}
@@ -522,17 +522,31 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 					}
 					break;
 
-					//{ TEXT("Å„"), BUTTON_SQRT, { X1, Y5, X1 + BUTTON_WIDTH, Y5 + BUTTON_HEIGHT } },
+					//{ TEXT("‚àö"), BUTTON_SQRT, { X1, Y5, X1 + BUTTON_WIDTH, Y5 + BUTTON_HEIGHT } },
 					//{ TEXT("^"), BUTTON_POW, { X2, Y5, X2 + BUTTON_WIDTH, Y5 + BUTTON_HEIGHT } },
 					//{ TEXT("Mod"), BUTTON_MOD, { X3, Y5, X3 + BUTTON_WIDTH, Y5 + BUTTON_HEIGHT } },
 					//{ TEXT("Sin"), BUTTON_SIN, { X4, Y5, X4 + BUTTON_WIDTH, Y5 + BUTTON_HEIGHT } },
 					//{ TEXT("Cos"), BUTTON_COS, { X5, Y5, X5 + BUTTON_WIDTH, Y5 + BUTTON_HEIGHT } },
 					//{ TEXT("Tan"), BUTTON_TAN, { X1, Y6, X1 + BUTTON_WIDTH, Y6 + BUTTON_HEIGHT } },
-					//{ TEXT("ê≈ã‡"), BUTTON_TAX, { X2, Y6, X2 + BUTTON_WIDTH, Y6 + BUTTON_HEIGHT } },
+					//{ TEXT("Á®éÈáë"), BUTTON_TAX, { X2, Y6, X2 + BUTTON_WIDTH, Y6 + BUTTON_HEIGHT } },
 
 				case BUTTON_CLEAR:
+				{
+					pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, sizeof(TCHAR) * 2, GMEM_MOVEABLE);
+					pCalculatorApp->m_lpszText[0] = TEXT('0');
+					pCalculatorApp->m_lpszText[1] = 0;
+					pCalculatorApp->m_bEqualed = 1;
+					pCalculatorApp->m_bInputOperand = 0;
+					pCalculatorApp->m_bInputPoint = 0;
+					pCalculatorApp->m_bError = 0;
+				}
+				break;
+				case BUTTON_BACK:
+				{
+					const DWORD dwSize = GlobalSize(pCalculatorApp->m_lpszText);
+					if (pCalculatorApp->m_bError || pCalculatorApp->m_bEqualed || dwSize / sizeof(TCHAR) == 2)
 					{
-						pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, sizeof(TCHAR)* 2, GMEM_MOVEABLE);
+						pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, sizeof(TCHAR) * 2, GMEM_MOVEABLE);
 						pCalculatorApp->m_lpszText[0] = TEXT('0');
 						pCalculatorApp->m_lpszText[1] = 0;
 						pCalculatorApp->m_bEqualed = 1;
@@ -540,157 +554,143 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 						pCalculatorApp->m_bInputPoint = 0;
 						pCalculatorApp->m_bError = 0;
 					}
-					break;
-				case BUTTON_BACK:
+					else
 					{
-						const DWORD dwSize = GlobalSize(pCalculatorApp->m_lpszText);
-						if (pCalculatorApp->m_bError || pCalculatorApp->m_bEqualed || dwSize / sizeof(TCHAR) == 2)
-						{
-							pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, sizeof(TCHAR)* 2, GMEM_MOVEABLE);
-							pCalculatorApp->m_lpszText[0] = TEXT('0');
-							pCalculatorApp->m_lpszText[1] = 0;
-							pCalculatorApp->m_bEqualed = 1;
-							pCalculatorApp->m_bInputOperand = 0;
-							pCalculatorApp->m_bInputPoint = 0;
-							pCalculatorApp->m_bError = 0;
-						}
-						else
-						{
-							pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, dwSize - sizeof(TCHAR), GMEM_MOVEABLE);
-							pCalculatorApp->m_lpszText[dwSize / sizeof(TCHAR)-2] = 0;
-						}
+						pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, dwSize - sizeof(TCHAR), GMEM_MOVEABLE);
+						pCalculatorApp->m_lpszText[dwSize / sizeof(TCHAR) - 2] = 0;
 					}
-					break;
+				}
+				break;
 				case BUTTON_CLOSE:
 					PostMessage(hwnd, WM_CLOSE, 0, 0);
 					break;
 				}
-				SetFocus(hwnd); // ÉLÅ[É{Å[Éhì¸óÕÇóLå¯Ç…Ç∑ÇÈÇΩÇﬂÉÅÉCÉìÉEÉBÉìÉhÉEÇ…ÉtÉHÅ[ÉJÉXÇñﬂÇ∑
+				SetFocus(hwnd); // „Ç≠„Éº„Éú„Éº„ÉâÂÖ•Âäõ„ÇíÊúâÂäπ„Å´„Åô„Çã„Åü„ÇÅ„É°„Ç§„É≥„Ç¶„Ç£„É≥„Éâ„Ç¶„Å´„Éï„Ç©„Éº„Ç´„Çπ„ÇíÊàª„Åô
 				InvalidateRect(hwnd, 0 /*&rectDisplayText*/, 0);
 				wasHandled = true;
 				result = 0;
 				break;
 
-    case WM_NCHITTEST:
-		wParam = DefWindowProc(hwnd, message, wParam, lParam);
-		if (wParam == HTCLIENT)
-			return HTCAPTION;
-		else
-			return wParam;
+			case WM_NCHITTEST:
+				wParam = DefWindowProc(hwnd, message, wParam, lParam);
+				if (wParam == HTCLIENT)
+					return HTCAPTION;
+				else
+					return wParam;
 
-	case WM_KEYDOWN:
-		if (pCalculatorApp->m_bCapture == 0)
-		{
-			int nButton = -1;
-			switch (wParam)
-			{
-			case '0':
-			case VK_NUMPAD0:
-				nButton = BUTTON_0;
+			case WM_KEYDOWN:
+				if (pCalculatorApp->m_bCapture == 0)
+				{
+					int nButton = -1;
+					switch (wParam)
+					{
+					case '0':
+					case VK_NUMPAD0:
+						nButton = BUTTON_0;
+						break;
+					case '1':
+					case VK_NUMPAD1:
+						nButton = BUTTON_1;
+						break;
+					case '2':
+					case VK_NUMPAD2:
+						nButton = BUTTON_2;
+						break;
+					case '3':
+					case VK_NUMPAD3:
+						nButton = BUTTON_3;
+						break;
+					case '4':
+					case VK_NUMPAD4:
+						nButton = BUTTON_4;
+						break;
+					case '5':
+					case VK_NUMPAD5:
+						nButton = BUTTON_5;
+						break;
+					case '6':
+					case VK_NUMPAD6:
+						nButton = BUTTON_6;
+						break;
+					case '7':
+					case VK_NUMPAD7:
+						nButton = BUTTON_7;
+						break;
+					case '8':
+					case VK_NUMPAD8:
+						nButton = BUTTON_8;
+						break;
+					case '9':
+					case VK_NUMPAD9:
+						nButton = BUTTON_9;
+						break;
+					case '+':
+					case VK_ADD:
+						nButton = BUTTON_PLUS;
+						break;
+					case VK_SUBTRACT:
+						nButton = BUTTON_MINUS;
+						break;
+					case '*':
+					case VK_MULTIPLY:
+						nButton = BUTTON_MULTIPLY;
+						break;
+					case 191:
+					case VK_DIVIDE:
+						nButton = BUTTON_DIVIDE;
+						break;
+					case VK_DECIMAL:
+						nButton = BUTTON_POINT;
+						break;
+					case '=':
+					case VK_SEPARATOR:
+					case VK_RETURN:
+						nButton = BUTTON_EQUAL;
+						break;
+					case VK_DELETE:
+					case VK_ESCAPE:
+						nButton = BUTTON_CLEAR;
+						break;
+					case VK_BACK:
+						nButton = BUTTON_BACK;
+						break;
+					case 219:
+						nButton = BUTTON_LEFT;
+						break;
+					case 221:
+						nButton = BUTTON_RIGHT;
+						break;
+					}
+
+					if (nButton != -1)
+					{
+						//SendMessage(pCalculatorApp->m_ButtonList[nButton]., WM_COMMAND, MAKELONG(::GetDlgCtrlID(hwndCancel), BN_CLICKED), (LPARAM)hwndCancel);
+						//SendMessage(pCalculatorApp->m_ButtonList[nButton],)
+						SendMessage(hwnd, WM_COMMAND, nButton, 0);
+					}
+				}
 				break;
-			case '1':
-			case VK_NUMPAD1:
-				nButton = BUTTON_1;
-				break;
-			case '2':
-			case VK_NUMPAD2:
-				nButton = BUTTON_2;
-				break;
-			case '3':
-			case VK_NUMPAD3:
-				nButton = BUTTON_3;
-				break;
-			case '4':
-			case VK_NUMPAD4:
-				nButton = BUTTON_4;
-				break;
-			case '5':
-			case VK_NUMPAD5:
-				nButton = BUTTON_5;
-				break;
-			case '6':
-			case VK_NUMPAD6:
-				nButton = BUTTON_6;
-				break;
-			case '7':
-			case VK_NUMPAD7:
-				nButton = BUTTON_7;
-				break;
-			case '8':
-			case VK_NUMPAD8:
-				nButton = BUTTON_8;
-				break;
-			case '9':
-			case VK_NUMPAD9:
-				nButton = BUTTON_9;
-				break;
-			case '+':
-			case VK_ADD:
-				nButton = BUTTON_PLUS;
-				break;
-			case VK_SUBTRACT:
-				nButton = BUTTON_MINUS;
-				break;
-			case '*':
-			case VK_MULTIPLY:
-				nButton = BUTTON_MULTIPLY;
-				break;
-			case 191:
-			case VK_DIVIDE:
-				nButton = BUTTON_DIVIDE;
-				break;
-			case VK_DECIMAL:
-				nButton = BUTTON_POINT;
-				break;
-			case '=':
-			case VK_SEPARATOR:
-			case VK_RETURN:
-				nButton = BUTTON_EQUAL;
-				break;
-			case VK_DELETE:
-			case VK_ESCAPE:
-				nButton = BUTTON_CLEAR;
-				break;
-			case VK_BACK:
-				nButton = BUTTON_BACK;
-				break;
-			case 219:
-				nButton = BUTTON_LEFT;
-				break;
-			case 221:
-				nButton = BUTTON_RIGHT;
+
+			case WM_DESTROY:
+				//KillTimer(hwnd, 0x1234);
+
+				if (pCalculatorApp->m_lpszText)
+				{
+					GlobalFree(pCalculatorApp->m_lpszText);
+				}
+
+				PostQuitMessage(0);
+				wasHandled = true;
+				result = 1;
 				break;
 			}
-
-			if (nButton != -1)
-			{
-				//SendMessage(pCalculatorApp->m_ButtonList[nButton]., WM_COMMAND, MAKELONG(::GetDlgCtrlID(hwndCancel), BN_CLICKED), (LPARAM)hwndCancel);
-				//SendMessage(pCalculatorApp->m_ButtonList[nButton],)
-				SendMessage(hwnd, WM_COMMAND, nButton, 0);
-			}
 		}
-		break;
 
-    case WM_DESTROY:
-		//KillTimer(hwnd, 0x1234);
-
-		if (pCalculatorApp->m_lpszText)
+		if (!wasHandled)
 		{
-			GlobalFree(pCalculatorApp->m_lpszText);
+			result = DefWindowProc(hwnd, message, wParam, lParam);
 		}
+	}
 
-        PostQuitMessage(0);
-        wasHandled = true;
-        result = 1;
-        break;
-            }
-        }
-
-        if (!wasHandled)
-        {
-            result = DefWindowProc(hwnd, message, wParam, lParam);
-        }
-    }
-
-    return result;
+	return result;
 }
