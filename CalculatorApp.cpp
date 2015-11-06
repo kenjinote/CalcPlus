@@ -1,4 +1,4 @@
-#pragma comment(lib,"imm32")
+﻿#pragma comment(lib,"imm32")
 
 #include "CalculatorApp.h"
 #include "CalculatorCore.h"
