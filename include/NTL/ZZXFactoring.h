@@ -41,11 +41,11 @@ inline vec_ZZX SFFactor(const ZZX& f, long verbose=0, long bnd=0)
 // f divides a polynomial h whose Euclidean norm
 // is bounded by 2^{bnd} in absolute value.
 
-extern long ZZXFac_MaxPrune;
-extern long ZZXFac_InitNumPrimes;
-extern long ZZXFac_MaxNumPrimes;
-extern long ZZXFac_PowerHack;
-extern long ZZXFac_van_Hoeij;
+extern NTL_CHEAP_THREAD_LOCAL long ZZXFac_MaxPrune;
+extern NTL_CHEAP_THREAD_LOCAL long ZZXFac_InitNumPrimes;
+extern NTL_CHEAP_THREAD_LOCAL long ZZXFac_MaxNumPrimes;
+extern NTL_CHEAP_THREAD_LOCAL long ZZXFac_PowerHack;
+extern NTL_CHEAP_THREAD_LOCAL long ZZXFac_van_Hoeij;
 
 
 void factor(ZZ& c,
@@ -55,7 +55,7 @@ void factor(ZZ& c,
             long bnd=0);
 
 // input f is is an arbitrary polynomial.
-// c is the content of f, and factors is the facrorization
+// c is the content of f, and factors is the factorization
 // of its primitive part.
 
 // bnd is as in SFFactor.

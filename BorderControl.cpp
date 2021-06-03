@@ -1,4 +1,3 @@
-#define _WIN32_WINNT 0x0601
 #include <windows.h>
 #include "BorderControl.h"
 #define SZCECOWIZBUTTONPROC TEXT("BorderProc")
@@ -23,9 +22,9 @@ HWND BorderControl::CreateBorder(
 	m_nHeight = nHeight;
 	const HWND hWnd = CreateWindowEx(0, L"STATIC", 0, WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, 0, nHeight, 640, 1, hWndParent, 0, hInstance, NULL);
 	if (!hWnd) return NULL;
-	SetClassLong(hWnd, GCL_STYLE, GetClassLong(hWnd, GCL_STYLE) & ~CS_DBLCLKS);
+	SetClassLongPtr(hWnd, GCL_STYLE, GetClassLongPtr(hWnd, GCL_STYLE) & ~CS_DBLCLKS);
 	SetProp(hWnd, SZCECOWIZBUTTONPROC, this); // ウィンドウハンドルのプロパテにオブジェクトのポインタを関連付ける
-	m_DefBorderProc = (WNDPROC)SetWindowLong(hWnd, GWL_WNDPROC, (LONG)GlobalButtonProc);
+	m_DefBorderProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)GlobalButtonProc);
 	return hWnd;
 }
 

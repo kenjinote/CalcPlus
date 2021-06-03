@@ -3,6 +3,9 @@
 #define NTL_vector__H
 
 #include <NTL/tools.h>
+#include <new>
+
+
 
 struct _ntl_VectorHeader {
    long length;
@@ -16,37 +19,18 @@ union _ntl_AlignedVectorHeader {
    double x1;
    long x2;
    char *x3;
+   long double x4;
 };
 
 #define NTL_VECTOR_HEADER_SIZE (sizeof(_ntl_AlignedVectorHeader))
 
-#define NTL_VEC_HEAD(p) (& (((_ntl_AlignedVectorHeader *) p)[-1].h))
+#define NTL_VEC_HEAD(p) (& (((_ntl_AlignedVectorHeader *) (p.rep))[-1].h))
 
-struct _ntl_vector_placement {
-   void *p;
-};
-
-inline _ntl_vector_placement _ntl_vector_placement_fn(void *p)
-{
-   _ntl_vector_placement x;
-   x.p = p;
-   return x;
-}
-
-inline void *operator new(NTL_SNS size_t, _ntl_vector_placement x) { return x.p; }
-
-// All of this monkey business is to avoid possible clashes with
-// a "placement new" operator which may or may not be defined
-// in a standard header file....why wasn't this just built
-// into the language to begin with?
 
 #ifndef NTL_RANGE_CHECK
-#define NTL_RANGE_CHECK_CODE 
-#define NTL_RANGE_CHECK_CODE1(i) 
+#define NTL_RANGE_CHECK_CODE(i) 
 #else
-#define NTL_RANGE_CHECK_CODE if (l__i < 0 || !_vec__rep || l__i >= NTL_VEC_HEAD(_vec__rep)->length) RangeError(l__i);
-
-#define NTL_RANGE_CHECK_CODE1(i) if ((i) < 0 || !_vec__rep || (i) >= NTL_VEC_HEAD(_vec__rep)->length) RangeError(i);
+#define NTL_RANGE_CHECK_CODE(i) if ((i) < 0 || !_vec__rep || (i) >= NTL_VEC_HEAD(_vec__rep)->length) LogicError("index out of range in Vec");
 
 #endif
 
@@ -54,12 +38,6 @@ inline void *operator new(NTL_SNS size_t, _ntl_vector_placement x) { return x.p;
 
 #ifndef NTL_VectorMinAlloc
 #define NTL_VectorMinAlloc (4)
-#endif
-
-// vectors are always expanded by at least this ratio
-
-#ifndef NTL_VectorExpansionRatio
-#define NTL_VectorExpansionRatio (1.2)
 #endif
 
 // controls initialization during input
@@ -71,50 +49,274 @@ inline void *operator new(NTL_SNS size_t, _ntl_vector_placement x) { return x.p;
 
 NTL_OPEN_NNS
 
+  
+
+
 
 template<class T>
-void BlockConstruct(T* p, long n)  
-{  
-   for (long i = 0; i < n; i++)  
-      (void) new(_ntl_vector_placement_fn(&p[i])) T;  
-}  
-  
-template<class T>
-void BlockDestroy(T* p, long n)  
+void default_BlockDestroy(T* p, long n)  
 {  
    for (long i = 0; i < n; i++)  
       p[i].~T();  
+
+   // NOTE: this routine is only invoked through a Vec destructor
+   // or a scope guard destructor, both of which are noexcept destructors.
+   // therefore, if ~T() should throw, the program will terminate
 }
+
+template<class T>
+void BlockDestroy(T* p, long n) { default_BlockDestroy(p, n); }  
+
+
+template<class T>
+void default_BlockConstruct(T* p, long n)  
+{  
+   long i;
+
+   NTL_SCOPE(guard) { default_BlockDestroy(p, i); };
+
+   for (i = 0; i < n; i++)  
+      (void) new(&p[i]) T;  
+
+   guard.relax();
+
+   // NOTE: we invoke T rather than T(), which would ensure
+   // POD types get zeroed out, but only in compilers that
+   // comply with C++03, which does not include MS compilers.
+   // So we just use T, which is less expensive, and it is better
+   // not to assume POD types get initialized.
+   
+}  
+
+template<class T>
+void BlockConstruct(T* p, long n) { default_BlockConstruct(p, n); } 
+
+
+
+
+template<class T>
+void default_BlockConstructFromVec(T* p, long n, const T* q)  
+{  
+   long i;
+
+   NTL_SCOPE(guard) { default_BlockDestroy(p, i); };
+
+   for (i = 0; i < n; i++)  
+      (void) new(&p[i]) T(q[i]);  
+
+   guard.relax();
+}  
+
+
+template<class T>
+void BlockConstructFromVec(T* p, long n, const T* q) { default_BlockConstructFromVec(p, n, q); }
+
+
+
+template<class T>
+void default_BlockConstructFromObj(T* p, long n, const T& q)  
+{  
+   long i;
+
+   NTL_SCOPE(guard) { default_BlockDestroy(p, i); };
+
+   for (i = 0; i < n; i++)  
+      (void) new(&p[i]) T(q);  
+
+   guard.relax();
+}  
+
+
+template<class T>
+void BlockConstructFromObj(T* p, long n, const T& q)  { default_BlockConstructFromObj(p, n, q); }
+
+
+
+template<bool tag> struct VecStrategy; 
+
+template<> struct VecStrategy<true> {
+
+// realloc-based relocation
+// we use the specialized memory management routines, if any
+
+
+template<class T>
+static void do_BlockDestroy(T* p, long n) 
+{ BlockDestroy(p, n); }  
+
+template<class T>
+static void do_BlockConstruct(T* p, long n) 
+{ BlockConstruct(p, n); } 
+
+template<class T>
+static void do_BlockConstructFromVec(T* p, long n, const T* q) 
+{ BlockConstructFromVec(p, n, q); }
+
+template<class T>
+static void do_BlockConstructFromObj(T* p, long n, const T& q)  
+{ BlockConstructFromObj(p, n, q); }
+
+};
+
+template<> struct VecStrategy<false> {
+
+// non-realloc-based relocation
+// we do not use the specialized memory management routines, even if
+// they are defined
+
+
+template<class T>
+static void do_BlockDestroy(T* p, long n) 
+{ default_BlockDestroy(p, n); }  
+
+template<class T>
+static void do_BlockConstruct(T* p, long n) 
+{ default_BlockConstruct(p, n); } 
+
+template<class T>
+static void do_BlockConstructFromVec(T* p, long n, const T* q) 
+{ default_BlockConstructFromVec(p, n, q); }
+
+
+template<class T>
+static void do_BlockConstructFromObj(T* p, long n, const T& q)  
+{ default_BlockConstructFromObj(p, n, q); }
+
+
+};
 
 
 
 template<class T>
 class Vec {  
+private:
+
+static void BlockDestroy(T* p, long n) 
+{ VecStrategy<NTL_RELOC_TAG>::do_BlockDestroy(p, n); }  
+
+static void BlockConstruct(T* p, long n) 
+{ VecStrategy<NTL_RELOC_TAG>::do_BlockConstruct(p, n); } 
+
+static void BlockConstructFromVec(T* p, long n, const T* q) 
+{ VecStrategy<NTL_RELOC_TAG>::do_BlockConstructFromVec(p, n, q); }
+
+static void BlockConstructFromObj(T* p, long n, const T& q) 
+{ VecStrategy<NTL_RELOC_TAG>::do_BlockConstructFromObj(p, n, q); }
+
+
 public:  
 
-   T *_vec__rep;  
+#ifdef NTL_SAFE_VECTORS
+
+   static constexpr bool relocatable = DeclareRelocatableType((T*)0);
+   static constexpr bool copyable = Relocate_aux_has_any_copy((T*)0);
+
+#endif
+
+   class _vec_deleter {
+   public:
+      static void apply(T* p) 
+      { 
+         // WrappedPtr only calls this when p is non-null
+         NTL_SNS free(((char *) p) - sizeof(_ntl_AlignedVectorHeader));
+      }
+   };
+
+   WrappedPtr<T, _vec_deleter> _vec__rep;  
   
-   void RangeError(long i) const;  
   
-   Vec() : _vec__rep(0) { }  
-   Vec(INIT_SIZE_TYPE, long n) : _vec__rep(0) { SetLength(n); }  
-   Vec(const Vec<T>& a) : _vec__rep(0) { *this = a; }     
-   Vec<T>& operator=(const Vec<T>& a);  
-   ~Vec();  
+   Vec() { }  
+
+   Vec(INIT_SIZE_TYPE, long n) { SetLength(n); }  
+   Vec(INIT_SIZE_TYPE, long n, const T& a) { SetLength(n, a); }  
+
+   // the following copy constructor does not rely on
+   // the assignment operator
+   Vec(const Vec& a)  
+   {  
+      long src_len = a.length();
+      const T *src = a.elts();
+      AllocateTo(src_len);
+      Init(src_len, src);
+      AdjustLength(src_len);
+   }     
+
+   Vec& operator=(const Vec& a);  
+
+#if (NTL_CXX_STANDARD >= 2011 && !defined(NTL_DISABLE_MOVE))
+
+   Vec(Vec&& a)  NTL_FAKE_NOEXCEPT
+   {  
+      if (a.fixed()) {
+	 long src_len = a.length();
+	 const T *src = a.elts();
+	 AllocateTo(src_len);
+	 Init(src_len, src);
+	 AdjustLength(src_len);
+      }
+      else {
+         _vec__rep.move(a._vec__rep);
+      }
+   }     
+
+#ifndef NTL_DISABLE_MOVE_ASSIGN
+   Vec& operator=(Vec&& a)  NTL_FAKE_NOEXCEPT
+   {
+      if(fixed() || a.fixed()) {
+         *this = a;
+      }
+      else {
+	 Vec tmp;
+	 tmp._vec__rep.swap(a._vec__rep);
+	 tmp._vec__rep.swap(this->_vec__rep);
+      }
+
+      return *this;
+   }
+#endif
+
+#endif
+
+   ~Vec()
+   {  
+      if (!_vec__rep) return;  
+      BlockDestroy(_vec__rep.rep, NTL_VEC_HEAD(_vec__rep)->init); 
+   }  
+
    void kill(); 
   
    void SetMaxLength(long n); 
    void FixLength(long n); 
+   void FixAtCurrentLength();
    void QuickSetLength(long n) { NTL_VEC_HEAD(_vec__rep)->length = n; } 
 
    void SetLength(long n) {
       if (_vec__rep && !NTL_VEC_HEAD(_vec__rep)->fixed &&
           n >= 0 && n <= NTL_VEC_HEAD(_vec__rep)->init)
          NTL_VEC_HEAD(_vec__rep)->length = n;
-      else
+      else 
          DoSetLength(n);
    }
-  
+
+   void SetLength(long n, const T& a) {
+      if (_vec__rep && !NTL_VEC_HEAD(_vec__rep)->fixed &&
+          n >= 0 && n <= NTL_VEC_HEAD(_vec__rep)->init)
+         NTL_VEC_HEAD(_vec__rep)->length = n;
+      else 
+         DoSetLength(n, a);
+   }
+
+   template<class F>
+   void SetLengthAndApply(long n, F f) {
+      if (_vec__rep && !NTL_VEC_HEAD(_vec__rep)->fixed &&
+          n >= 0 && n <= NTL_VEC_HEAD(_vec__rep)->init)
+         NTL_VEC_HEAD(_vec__rep)->length = n;
+      else 
+         DoSetLengthAndApply(n, f);
+   }
+
+
+
    long length() const 
    { return (!_vec__rep) ?  0 : NTL_VEC_HEAD(_vec__rep)->length; }  
 
@@ -129,13 +331,13 @@ public:
   
    T& operator[](long i)   
    {  
-      NTL_RANGE_CHECK_CODE1(i)  
+      NTL_RANGE_CHECK_CODE(i)  
       return _vec__rep[i];  
    }  
   
    const T& operator[](long i) const 
    {  
-      NTL_RANGE_CHECK_CODE1(i)  
+      NTL_RANGE_CHECK_CODE(i)  
       return _vec__rep[i];  
    }  
   
@@ -156,12 +358,17 @@ public:
    const T* elts() const { return _vec__rep; }  
    T* elts() { return _vec__rep; }  
          
- 
-   Vec(Vec<T>& x, INIT_TRANS_TYPE) 
-   { _vec__rep = x._vec__rep; x._vec__rep = 0; } 
+   Vec(Vec& x, INIT_TRANS_TYPE) 
+   { _vec__rep.swap(x._vec__rep); }
 
    long position(const T& a) const;  
    long position1(const T& a) const;  
+
+   void swap(Vec& y);
+   void move(Vec& y);
+   void append(const T& a);
+   void append(const Vec& w);
+
 
 // Some compatibility with vec_GF2
 
@@ -202,21 +409,65 @@ public:
 
    T& at(long i) {
       if ((i) < 0 || !_vec__rep || (i) >= NTL_VEC_HEAD(_vec__rep)->length)  
-         RangeError(i);
+         LogicError("index out of range in Vec");
       return _vec__rep[i];  
    }
 
    const T& at(long i) const {
       if ((i) < 0 || !_vec__rep || (i) >= NTL_VEC_HEAD(_vec__rep)->length)  
-         RangeError(i);
+         LogicError("index out of range in Vec");
       return _vec__rep[i];  
    }
 
+   class Watcher {
+   public:
+      Vec& watched;
+      explicit
+      Watcher(Vec& _watched) : watched(_watched) {}
+
+      ~Watcher() 
+      { 
+         if (watched.MaxLength() > NTL_RELEASE_THRESH) watched.kill();
+      }
+   };
 
 private:
    void DoSetLength(long n);
+   void DoSetLength(long n, const T& a);
+
+   template<class F>
+   void DoSetLengthAndApply(long n, F& f);
+
+   void AdjustLength(long n) { if (_vec__rep) NTL_VEC_HEAD(_vec__rep)->length = n; }
+   void AdjustAlloc(long n) { if (_vec__rep) NTL_VEC_HEAD(_vec__rep)->alloc = n; }
+   void AdjustMaxLength(long n) { if (_vec__rep) NTL_VEC_HEAD(_vec__rep)->init = n; }
+
+   void ReAllocate(long n, VecStrategy<true>);
+
+   void AllocateTo(long n); // reserves space for n items
+   void Init(long n); // make sure first n entries are initialized
+   void Init(long n, const T* src); // same, but use src
+   void Init(long n, const T& src); // same, but use src
+
+#ifdef NTL_SAFE_VECTORS
+   void ReAllocate(long n, VecStrategy<false>);
+   void InitMove(long n, T* src, std::true_type); 
+   void InitMove(long n, T* src, std::false_type); 
+   void InitCopyMove(long n, T* src, std::true_type); 
+   void InitCopyMove(long n, T* src, std::false_type); 
+#endif
+
+   template<class F>
+   void InitAndApply(long n, F& f);
 };  
+
+
+template <class T> NTL_DECLARE_RELOCATABLE((Vec<T>*))
+
+
+
  
+
 
 
 #if (!defined(NTL_CLEAN_PTR))
@@ -234,7 +485,7 @@ long Vec<T>::position(const T& a) const
        _vec__rep + res != &a) return -1;  
    
    if (res >= num_init)  
-       Error("position: reference to uninitialized object"); 
+       LogicError("position: reference to uninitialized object"); 
    return res;  
 }  
   
@@ -266,7 +517,7 @@ long Vec<T>::position(const T& a) const
    while (res < num_alloc && _vec__rep + res != &a)  res++;  
    if (res >= num_alloc) return -1;  
    if (res >= num_init)  
-       Error("position: reference to uninitialized object"); 
+       LogicError("position: reference to uninitialized object"); 
    return res;  
 }  
  
@@ -285,26 +536,115 @@ long Vec<T>::position1(const T& a) const
 
 #endif
 
+template<class T>
+void Vec<T>::ReAllocate(long m, VecStrategy<true>)   
+{
+   //std::cerr << "ReAllocate\n";
+
+   char *p = ((char *) _vec__rep.rep) - sizeof(_ntl_AlignedVectorHeader); 
+   p = (char *) NTL_SNS_REALLOC(p, m, sizeof(T), sizeof(_ntl_AlignedVectorHeader)); 
+   if (!p) {  
+      MemoryError();  
+   }  
+   _vec__rep = (T *) (p + sizeof(_ntl_AlignedVectorHeader)); 
+   NTL_VEC_HEAD(_vec__rep)->alloc = m;  
+}
+
+#ifdef NTL_SAFE_VECTORS
+
+template<class T>
+void Vec<T>::InitMove(long n, T *src, std::true_type) 
+{
+   long num_init = MaxLength();
+   if (n <= num_init) return;
+
+   for (long i = 0; i < n-num_init; i++)
+      (void) new(_vec__rep + num_init + i) T(std::move(src[i])); 
+
+   AdjustMaxLength(n);
+}
+
+#if 0
+template<class T>
+void Vec<T>::InitMove(long n, T *src, std::false_type)
+{
+   Init(n, src);
+}
+#else
+// This version throws a runtime error, rather than a compile-time
+// error, if no copy contructor is available.
+// This increases backward compatibility.
+
+template<class T>
+void Vec<T>::InitCopyMove(long n, T *src, std::true_type)
+{
+   Init(n, src);
+}
+
+template<class T>
+void Vec<T>::InitCopyMove(long n, T *src, std::false_type)
+{
+   LogicError("cannot re-allocate vector: no copy constructor for type");
+}
+
+template<class T>
+void Vec<T>::InitMove(long n, T *src, std::false_type)
+{
+   typedef std::integral_constant<bool, copyable> copy_it;
+   InitCopyMove(n, src, copy_it());
+}
+
+#endif
+
+
+template<class T>
+void Vec<T>::ReAllocate(long m, VecStrategy<false>)   
+{
+   Vec tmp;
+   long src_len = length();
+   long src_init = MaxLength();
+   T *src = elts();
+
+   char *p = (char *) NTL_SNS_MALLOC(m, sizeof(T), sizeof(_ntl_AlignedVectorHeader)); 
+   if (!p) {  
+      MemoryError();  
+   }  
+   tmp._vec__rep = (T *) (p + sizeof(_ntl_AlignedVectorHeader)); 
+
+   NTL_VEC_HEAD(tmp._vec__rep)->length = 0;  
+   NTL_VEC_HEAD(tmp._vec__rep)->alloc = m;  
+   NTL_VEC_HEAD(tmp._vec__rep)->init = 0;  
+   NTL_VEC_HEAD(tmp._vec__rep)->fixed = 0;  
+
+   typedef std::is_nothrow_move_constructible<T> move_it;
+   
+   tmp.InitMove(src_init, src, move_it());
+
+   tmp.AdjustLength(src_len);
+   tmp.swap(*this);
+}
+
+#endif
  
 template<class T>
-void Vec<T>::DoSetLength(long n)   
+void Vec<T>::AllocateTo(long n)   
 {   
    long m;  
   
    if (n < 0) {  
-      Error("negative length in vector::SetLength");  
+      LogicError("negative length in vector::SetLength");  
    }  
    if (NTL_OVERFLOW(n, sizeof(T), 0))  
-      Error("excessive length in vector::SetLength"); 
+      ResourceError("excessive length in vector::SetLength"); 
       
    if (_vec__rep && NTL_VEC_HEAD(_vec__rep)->fixed) {
       if (NTL_VEC_HEAD(_vec__rep)->length == n) 
          return; 
       else 
-         Error("SetLength: can't change this vector's length"); 
+         LogicError("SetLength: can't change this vector's length"); 
    }  
+
    if (n == 0) {  
-      if (_vec__rep) NTL_VEC_HEAD(_vec__rep)->length = 0;  
       return;  
    }  
   
@@ -312,37 +652,104 @@ void Vec<T>::DoSetLength(long n)
       m = ((n+NTL_VectorMinAlloc-1)/NTL_VectorMinAlloc) * NTL_VectorMinAlloc; 
       char *p = (char *) NTL_SNS_MALLOC(m, sizeof(T), sizeof(_ntl_AlignedVectorHeader)); 
       if (!p) {  
-	 Error("out of memory in vector::SetLength()");  
+	 MemoryError();  
       }  
       _vec__rep = (T *) (p + sizeof(_ntl_AlignedVectorHeader)); 
   
-      BlockConstruct(_vec__rep, n); 
-  
-      NTL_VEC_HEAD(_vec__rep)->length = n;  
-      NTL_VEC_HEAD(_vec__rep)->init = n;  
+      NTL_VEC_HEAD(_vec__rep)->length = 0;  
       NTL_VEC_HEAD(_vec__rep)->alloc = m;  
+      NTL_VEC_HEAD(_vec__rep)->init = 0;  
       NTL_VEC_HEAD(_vec__rep)->fixed = 0;  
    }  
-   else if (n <= NTL_VEC_HEAD(_vec__rep)->init) {  
-      NTL_VEC_HEAD(_vec__rep)->length = n;  
-   }  
-   else  {  
-      if (n > NTL_VEC_HEAD(_vec__rep)->alloc) {  
-         m = max(n, long(NTL_VectorExpansionRatio*NTL_VEC_HEAD(_vec__rep)->alloc));  
-         m = ((m+NTL_VectorMinAlloc-1)/NTL_VectorMinAlloc) * NTL_VectorMinAlloc; 
-         char *p = ((char *) _vec__rep) - sizeof(_ntl_AlignedVectorHeader); 
-         p = (char *) NTL_SNS_REALLOC(p, m, sizeof(T), sizeof(_ntl_AlignedVectorHeader)); 
-         if (!p) {  
-	    Error("out of memory in vector::SetLength()");  
-         }  
-         _vec__rep = (T *) (p + sizeof(_ntl_AlignedVectorHeader)); 
-	 NTL_VEC_HEAD(_vec__rep)->alloc = m;  
-      }  
-      BlockConstruct(_vec__rep + NTL_VEC_HEAD(_vec__rep)->init, n - NTL_VEC_HEAD(_vec__rep)->init); 
-      NTL_VEC_HEAD(_vec__rep)->length = n;  
-      NTL_VEC_HEAD(_vec__rep)->init = n;  
+   else if (n > NTL_VEC_HEAD(_vec__rep)->alloc) {  
+      m = max(n, _ntl_vec_grow(NTL_VEC_HEAD(_vec__rep)->alloc));  
+      m = ((m+NTL_VectorMinAlloc-1)/NTL_VectorMinAlloc) * NTL_VectorMinAlloc; 
+
+      ReAllocate(m, VecStrategy<NTL_RELOC_TAG>());
    }  
 }  
+
+template<class T>
+void Vec<T>::Init(long n)   
+{   
+   long num_init = MaxLength();
+   if (n <= num_init) return;
+
+   BlockConstruct(_vec__rep + num_init, n-num_init);
+   AdjustMaxLength(n);
+}
+
+template<class T>
+void Vec<T>::Init(long n, const T *src) 
+{
+   long num_init = MaxLength();
+   if (n <= num_init) return;
+
+   BlockConstructFromVec(_vec__rep + num_init, n-num_init, src);
+   AdjustMaxLength(n);
+
+}
+
+template<class T>
+void Vec<T>::Init(long n, const T& src) 
+{   
+   long num_init = MaxLength();
+   if (n <= num_init) return;
+
+   BlockConstructFromObj(_vec__rep + num_init, n-num_init, src);
+   AdjustMaxLength(n);
+}
+
+template<class T> template<class F>
+void Vec<T>::InitAndApply(long n, F& f)   
+{   
+   long num_init = MaxLength();
+   if (n <= num_init) return;
+
+   BlockConstruct(_vec__rep + num_init, n-num_init);
+
+   NTL_SCOPE(guard) { BlockDestroy(_vec__rep + num_init, n - num_init); };
+
+   long i;
+   for (i = num_init; i < n; i++)
+      f(_vec__rep[i]);
+
+   guard.relax();
+
+   AdjustMaxLength(n);
+}
+
+template<class T>
+void Vec<T>::DoSetLength(long n)
+{
+   AllocateTo(n);
+   Init(n);
+   AdjustLength(n);
+}
+
+template<class T>
+void Vec<T>::DoSetLength(long n, const T& a)
+{
+   // if vector gets moved, we have to worry about
+   // a aliasing a vector element
+   const T *src = &a;
+   long pos = -1;
+   if (n > allocated()) pos = position(a);
+   AllocateTo(n);
+   if (pos != -1) src = elts() + pos;
+   Init(n, *src);
+   AdjustLength(n);
+}
+
+template<class T> template<class F>
+void Vec<T>::DoSetLengthAndApply(long n, F& f)
+{
+   AllocateTo(n);
+   InitAndApply(n, f);
+   AdjustLength(n);
+}
+
+
  
  
 template<class T>
@@ -356,14 +763,17 @@ void Vec<T>::SetMaxLength(long n)
 template<class T>
 void Vec<T>::FixLength(long n) 
 { 
-   if (_vec__rep) Error("FixLength: can't fix this vector"); 
-   if (n < 0) Error("FixLength: negative length"); 
+   if (_vec__rep) LogicError("FixLength: can't fix this vector"); 
+   if (n < 0) LogicError("FixLength: negative length"); 
+
+   NTL_SCOPE(guard) { _vec__rep.kill(); };
+
    if (n > 0) 
       SetLength(n); 
    else { 
       char *p = (char *) NTL_SNS_MALLOC(0, sizeof(T), sizeof(_ntl_AlignedVectorHeader)); 
       if (!p) {  
-	 Error("out of memory in vector::FixLength()");  
+	 MemoryError();  
       }  
       _vec__rep = (T *) (p + sizeof(_ntl_AlignedVectorHeader)); 
   
@@ -372,101 +782,177 @@ void Vec<T>::FixLength(long n)
       NTL_VEC_HEAD(_vec__rep)->alloc = 0;  
    } 
    NTL_VEC_HEAD(_vec__rep)->fixed = 1; 
+
+   guard.relax();
 } 
+
+template<class T>
+void Vec<T>::FixAtCurrentLength() 
+{
+   if (fixed()) return;
+   if (length() != MaxLength()) 
+      LogicError("FixAtCurrentLength: can't fix this vector");
+
+   if (_vec__rep)
+      NTL_VEC_HEAD(_vec__rep)->fixed = 1;
+   else
+      FixLength(0);
+}
   
 template<class T>
-Vec<T>& Vec<T>::operator=(const Vec<T>& a)  
+Vec<T>& Vec<T>::operator=(const Vec& a)  
 {  
-   long i, n;  
-   T *p;  
-   const T *ap;  
-  
-   n = a.length();  
-   SetLength(n);  
-   ap = a.elts();  
-   p = elts();  
-  
-   for (i = 0; i < n; i++)  
-      p[i] = ap[i];  
+   if (this == &a) return *this;
+
+   long init = MaxLength();
+   long src_len = a.length();
+   const T *src = a.elts();
+
+   AllocateTo(src_len);
+   T *dst = elts();
+
+   // NOTE: these assignments could throw
+
+   if (src_len <= init) {
+
+      long i;
+      for (i = 0; i < src_len; i++)
+         dst[i] = src[i];
+
+   }
+   else {
+      long i;
+      for (i = 0; i < init; i++)
+         dst[i] = src[i];
+      Init(src_len, src+init);
+   }
+
+   AdjustLength(src_len);
+
    return *this;  
 }  
        
   
-template<class T>
-Vec<T>::~Vec<T>()  
-{  
-   if (!_vec__rep) return;  
-   BlockDestroy(_vec__rep, NTL_VEC_HEAD(_vec__rep)->init); 
-   NTL_SNS free(((char *) _vec__rep) - sizeof(_ntl_AlignedVectorHeader));  
-}  
    
 template<class T>
 void Vec<T>::kill()  
 {  
-   if (!_vec__rep) return;  
-   if (NTL_VEC_HEAD(_vec__rep)->fixed) Error("can't kill this vector"); 
-   BlockDestroy(_vec__rep, NTL_VEC_HEAD(_vec__rep)->init); 
-   NTL_SNS free(((char *) _vec__rep) - sizeof(_ntl_AlignedVectorHeader));  
-   _vec__rep = 0; 
+   Vec tmp;
+   this->swap(tmp);
 }  
   
-template<class T>
-void Vec<T>::RangeError(long i) const  
-{  
-   NTL_SNS cerr << "index out of range in vector: ";  
-   NTL_SNS cerr << i;  
-   if (!_vec__rep)  
-      NTL_SNS cerr << "(0)";  
-   else  
-      NTL_SNS cerr << "(" << NTL_VEC_HEAD(_vec__rep)->length << ")";  
-   Error("");  
-}  
   
 template<class T>
-void swap(Vec<T>& x, Vec<T>& y)  
+void Vec<T>::swap(Vec& y)  
 {  
-   T* t;  
-   long xf = x.fixed();  
+   long xf = fixed();  
    long yf = y.fixed();  
    if (xf != yf ||   
-       (xf && NTL_VEC_HEAD(x._vec__rep)->length != NTL_VEC_HEAD(y._vec__rep)->length))  
-      Error("swap: can't swap these vectors");  
-   t = x._vec__rep;  
-   x._vec__rep = y._vec__rep;  
-   y._vec__rep = t;  
+       (xf && NTL_VEC_HEAD(_vec__rep)->length != NTL_VEC_HEAD(y._vec__rep)->length))  
+      LogicError("swap: can't swap these vectors");  
+
+   _vec__rep.swap(y._vec__rep);
 } 
+
+template<class T>
+void swap(Vec<T>& x, Vec<T>& y)  
+{ 
+   x.swap(y);
+}
  
 template<class T>
-void append(Vec<T>& v, const T& a)  
-{  
-   long l = v.length(); 
-   if (l >= v.allocated()) {  
-      long pos = v.position(a);  
-      v.SetLength(l+1);  
-      if (pos != -1)  
-         v[l] = v.RawGet(pos);  
-      else  
-         v[l] = a;  
-   } 
-   else { 
-      v.SetLength(l+1);  
-      v[l] = a;  
-   } 
-}  
-  
-template<class T>
-void append(Vec<T>& v, const Vec<T>& w)  
-{  
-   long l = v.length();  
-   long m = w.length();  
-   long i;  
-   v.SetLength(l+m);  
-   for (i = 0; i < m; i++)  
-      v[l+i] = w[i];  
+void Vec<T>::move(Vec& y)  
+{
+   // special logic to get exception handling right
+   if (&y == this) return;
+   if (fixed() || y.fixed()) LogicError("move: can't move these vectors");
+
+   Vec tmp;
+   tmp._vec__rep.swap(y._vec__rep);
+   tmp._vec__rep.swap(this->_vec__rep);
 }
 
 
 
+// EXCEPTIONS: provides strong ES
+template<class T>
+void Vec<T>::append(const T& a)  
+{  
+   long len = length();
+   long init = MaxLength();
+   long src_len = 1;
+
+   // if vector gets moved, we have to worry about
+   // a aliasing a vector element
+   const T *src = &a;
+   long pos = -1;
+   if (len >= allocated()) pos = position(a);  
+   AllocateTo(len+src_len);
+
+   // The logic here is copy-pasted from the append-vector
+   // logic...mostly
+
+   long i;
+   T *dst = elts();
+   if (pos != -1) src = dst + pos;
+
+   // NOTE: these assignments could throw
+
+   if (len+src_len <= init) {
+      for (i = 0; i < src_len; i++)
+         dst[i+len] = src[i];
+   }
+   else {
+      for (i = 0; i < init-len; i++)
+         dst[i+len] = src[i];
+
+      // make sure we use BlockConstructFromObj
+      Init(src_len+len, *src);
+   }
+
+   AdjustLength(len+src_len);
+}  
+
+template<class T>
+void append(Vec<T>& v, const T& a)  
+{
+   v.append(a);
+}
+  
+template<class T>
+void Vec<T>::append(const Vec& w)  
+{  
+   long len = length();
+   long init = MaxLength();
+   long src_len = w.length();
+
+   AllocateTo(len+src_len);
+   const T *src = w.elts();
+   T *dst = elts();
+
+   // NOTE: these assignments could throw
+
+   if (len+src_len <= init) {
+      long i;
+      for (i = 0; i < src_len; i++)
+         dst[i+len] = src[i];
+   }
+   else {
+      long i;
+      for (i = 0; i < init-len; i++)
+         dst[i+len] = src[i];
+      Init(src_len+len, src+init-len);
+   }
+
+   AdjustLength(len+src_len);
+}
+
+
+template<class T>
+void append(Vec<T>& v, const Vec<T>& w)  
+{
+   v.append(w);
+}
 
 
 template<class T>
@@ -475,7 +961,7 @@ NTL_SNS istream & operator>>(NTL_SNS istream& s, Vec<T>& a)
    Vec<T> ibuf;  
    long c;   
    long n;   
-   if (!s) Error("bad vector input"); 
+   if (!s) NTL_INPUT_ERROR(s, "bad vector input"); 
    
    c = s.peek();  
    while (IsWhiteSpace(c)) {  
@@ -483,7 +969,7 @@ NTL_SNS istream & operator>>(NTL_SNS istream& s, Vec<T>& a)
       c = s.peek();  
    }  
    if (c != '[') {  
-      Error("bad vector input");  
+      NTL_INPUT_ERROR(s, "bad vector input");  
    }  
    
    n = 0;   
@@ -499,14 +985,15 @@ NTL_SNS istream & operator>>(NTL_SNS istream& s, Vec<T>& a)
       if (n % NTL_VectorInputBlock == 0) ibuf.SetMaxLength(n + NTL_VectorInputBlock); 
       n++;   
       ibuf.SetLength(n);   
-      if (!(s >> ibuf[n-1])) Error("bad vector input");   
+      if (!(s >> ibuf[n-1])) NTL_INPUT_ERROR(s, "bad vector input");   
       c = s.peek();  
       while (IsWhiteSpace(c)) {  
          s.get();  
          c = s.peek();  
       }  
    }   
-   if (IsEOFChar(c)) Error("bad vector input");  
+
+   if (IsEOFChar(c)) NTL_INPUT_ERROR(s, "bad vector input");  
    s.get(); 
    
    a = ibuf; 
@@ -561,12 +1048,15 @@ void conv(Vec<T>& x, const Vec<S>& a)
 {
    long n = a.length();
    x.SetLength(n);
+
    for (long i = 0; i < n; i++)
       conv(x[i], a[i]);
 }
 
 
 NTL_CLOSE_NNS
+
+
 
    
 

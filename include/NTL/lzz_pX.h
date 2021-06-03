@@ -5,6 +5,9 @@
 #include <NTL/vector.h>
 #include <NTL/lzz_p.h>
 #include <NTL/vec_lzz_p.h>
+#include <NTL/Lazy.h>
+#include <NTL/SmartPtr.h>
+#include <NTL/mat_lzz_p.h>
 
 NTL_OPEN_NNS
 
@@ -19,14 +22,14 @@ NTL_OPEN_NNS
 #define NTL_zz_pX_BERMASS_CROSSOVER (zz_pX_bermass_crossover[zz_pInfo->PrimeCnt])
 #define NTL_zz_pX_TRACE_CROSSOVER (zz_pX_trace_crossover[zz_pInfo->PrimeCnt])
 
-extern long zz_pX_mod_crossover[];
-extern long zz_pX_mul_crossover[];
-extern long zz_pX_newton_crossover[];
-extern long zz_pX_div_crossover[];
-extern long zz_pX_halfgcd_crossover[];
-extern long zz_pX_gcd_crossover[];
-extern long zz_pX_bermass_crossover[];
-extern long zz_pX_trace_crossover[];
+extern const long zz_pX_mod_crossover[];
+extern const long zz_pX_mul_crossover[];
+extern const long zz_pX_newton_crossover[];
+extern const long zz_pX_div_crossover[];
+extern const long zz_pX_halfgcd_crossover[];
+extern const long zz_pX_gcd_crossover[];
+extern const long zz_pX_bermass_crossover[];
+extern const long zz_pX_trace_crossover[];
 
 
 
@@ -46,16 +49,27 @@ Use the member function normalize() to strip leading zeros.
 
 **************************************************************/
 
-class zz_pX {
 
+class zz_pE; // forward declaration
+class zz_pXModulus;
+class fftRep;
+class zz_pXMultiplier;
+
+
+class zz_pX {
 public:
+typedef zz_p coeff_type;
+typedef zz_pE residue_type;
+typedef zz_pXModulus modulus_type;
+typedef zz_pXMultiplier multiplier_type;
+typedef fftRep fft_type;
+
 
 vec_zz_p rep;
 
 typedef vec_zz_p VectorBaseType;
 
 
-public:
 
 /***************************************************************
 
@@ -64,27 +78,29 @@ public:
 ****************************************************************/
 
 
-zz_pX()
+zz_pX() {}
 //  initial value 0
 
-   { }
+explicit zz_pX(long a) { *this = a; }
+explicit zz_pX(zz_p a) { *this = a; }
 
 
 zz_pX(INIT_SIZE_TYPE, long n) { rep.SetMaxLength(n); }
 
-zz_pX(const zz_pX& a) : rep(a.rep) { }
-// initial value is a
 
 inline zz_pX(long i, zz_p c);
 inline zz_pX(long i, long c);
 
-zz_pX& operator=(const zz_pX& a) 
-   { rep = a.rep; return *this; }
+inline zz_pX(INIT_MONO_TYPE, long i, zz_p c);
+inline zz_pX(INIT_MONO_TYPE, long i, long c);
+inline zz_pX(INIT_MONO_TYPE, long i);
+
 
 inline zz_pX& operator=(long a);
 inline zz_pX& operator=(zz_p a);
 
-~zz_pX() { }
+// default copy constructor and assignment
+// default destructor
 
 void normalize();
 // strip leading zeros
@@ -103,12 +119,15 @@ void kill()
 
 
 
-typedef zz_p coeff_type;
 void SetLength(long n) { rep.SetLength(n); }
 zz_p& operator[](long i) { return rep[i]; }
 const zz_p& operator[](long i) const { return rep[i]; }
 
 
+void swap(zz_pX& x)
+{
+   rep.swap(x.rep);
+}
 
 
 static const zz_pX& zero();
@@ -116,6 +135,9 @@ static const zz_pX& zero();
 zz_pX(zz_pX& x, INIT_TRANS_TYPE) : rep(x.rep, INIT_TRANS) { }
 
 };
+
+
+NTL_DECLARE_RELOCATABLE((zz_pX*))
 
 
 
@@ -171,15 +193,17 @@ void SetCoeff(zz_pX& x, long i, zz_p a);
 // x[i] = a, error is raised if i < 0
 
 void SetCoeff(zz_pX& x, long i, long a);
-
-inline zz_pX::zz_pX(long i, zz_p a) 
-   { SetCoeff(*this, i, a); }
-
-inline zz_pX::zz_pX(long i, long a) 
-   { SetCoeff(*this, i, a); }
+// x[i] = a, error is raised if i < 0
 
 void SetCoeff(zz_pX& x, long i);
 // x[i] = 1, error is raised if i < 0
+
+inline zz_pX::zz_pX(long i, zz_p a) { SetCoeff(*this, i, a); }
+inline zz_pX::zz_pX(long i, long a) { SetCoeff(*this, i, a); }
+
+inline zz_pX::zz_pX(INIT_MONO_TYPE, long i, zz_p a) { SetCoeff(*this, i, a); }
+inline zz_pX::zz_pX(INIT_MONO_TYPE, long i, long a) { SetCoeff(*this, i, a); }
+inline zz_pX::zz_pX(INIT_MONO_TYPE, long i) { SetCoeff(*this, i); }
 
 void SetX(zz_pX& x);
 // x is set to the monomial X
@@ -200,7 +224,7 @@ inline void set(zz_pX& x)
 inline void swap(zz_pX& x, zz_pX& y)
 // swap x & y (only pointers are swapped)
 
-   { swap(x.rep, y.rep); }
+   { x.swap(y); }
 
 void random(zz_pX& x, long n);
 inline zz_pX random_zz_pX(long n)
@@ -548,23 +572,36 @@ class fftRep {
 public:
    long k;                // a 2^k point representation
    long MaxK;             // maximum space allocated
-   long *tbl[4];
+   long len;              // length of truncated FFT
    long NumPrimes;
+   UniqueArray<long> tbl[4];
 
-   fftRep(const fftRep&); 
+   fftRep() : k(-1), MaxK(-1), len(0), NumPrimes(0) { }
+
+   fftRep(const fftRep& R) : k(-1), MaxK(-1), len(0), NumPrimes(0)
+   { *this = R; }
+
+   fftRep(INIT_SIZE_TYPE, long InitK) : k(-1), MaxK(-1), len(0), NumPrimes(0)
+   { SetSize(InitK); }
+
    fftRep& operator=(const fftRep&); 
-
    void SetSize(long NewK);
-
-   fftRep() { k = MaxK = -1; NumPrimes = 0; }
-   fftRep(INIT_SIZE_TYPE, long InitK) 
-   { k = MaxK = -1; NumPrimes = 0; SetSize(InitK); }
-   ~fftRep();
+   void DoSetSize(long NewK, long NewNumPrimes);
 };
 
 
-void TofftRep(fftRep& y, const zz_pX& x, long k, long lo, long hi);
+
+
+void TofftRep_trunc(fftRep& y, const zz_pX& x, long k, long len,
+                    long lo, long hi);
+
+inline void TofftRep_trunc(fftRep& y, const zz_pX& x, long k, long len)
+{ TofftRep_trunc(y, x, k, len, 0, deg(x)); }
+
+inline
+void TofftRep(fftRep& y, const zz_pX& x, long k, long lo, long hi)
 // computes an n = 2^k point convolution of x[lo..hi].
+{ TofftRep_trunc(y, x, k, 1L << k, lo, hi); }
 
 inline void TofftRep(fftRep& y, const zz_pX& x, long k)
 
@@ -738,7 +775,6 @@ private:
 public:
 
    zz_pXMatrix() { }
-   ~zz_pXMatrix() { }
 
    void operator=(const zz_pXMatrix&);
    zz_pX& operator() (long i, long j) { return elts[i][j]; }
@@ -819,7 +855,6 @@ long InvModStatus(zz_pX& x, const zz_pX& a, const zz_pX& f);
 class zz_pXModulus {
 public:
    zz_pXModulus() : UseFFT(0), n(-1)  { }
-   ~zz_pXModulus() { }
 
    zz_pX f;   // the modulus
    long UseFFT;// flag indicating whether FFT should be used.
@@ -829,7 +864,9 @@ public:
    fftRep FRep; // 2^k point rep of f
                 // H = rev((rev(f))^{-1} rem X^{n-1})
    fftRep HRep; // 2^l point rep of H
-   vec_zz_p tracevec;  // mutable
+
+   OptionalVal< Lazy<vec_zz_p> > tracevec;  
+   // extra level of indirection to ensure relocatability
 
    zz_pXModulus(const zz_pX& ff);
 
@@ -837,6 +874,9 @@ public:
    const zz_pX& val() const { return f; }
 
 };
+
+
+NTL_DECLARE_RELOCATABLE((zz_pXModulus*))
 
 
 inline long deg(const zz_pXModulus& F) { return F.n; }
@@ -937,7 +977,6 @@ public:
    zz_pXMultiplier() : UseFFT(0)  { }
    zz_pXMultiplier(const zz_pX& b, const zz_pXModulus& F);
 
-   ~zz_pXMultiplier() { }
 
    zz_pX b;   
    long UseFFT;
@@ -1067,7 +1106,9 @@ struct zz_pXArgument {
    vec_zz_pX H;
 };
 
-extern long zz_pXArgBound;
+extern 
+NTL_CHEAP_THREAD_LOCAL 
+long zz_pXArgBound;
 
 
 void build(zz_pXArgument& H, const zz_pX& h, const zz_pXModulus& F, long m);
@@ -1080,6 +1121,28 @@ void CompMod(zz_pX& x, const zz_pX& g, const zz_pXArgument& H,
 inline zz_pX
 CompMod(const zz_pX& g, const zz_pXArgument& H, const zz_pXModulus& F)
    { zz_pX x; CompMod(x, g, H, F); NTL_OPT_RETURN(zz_pX, x); }
+
+
+// New alternative CompMod strategy that just reduces to 
+// matrix multiplication ... 
+
+
+struct zz_pXNewArgument {
+   Mat<zz_p> mat;
+   zz_pX     poly;
+};
+
+void build(zz_pXNewArgument& H, const zz_pX& h, const zz_pXModulus& F, long m);
+void CompMod(zz_pX& x, const zz_pX& g, const zz_pXNewArgument& H,
+             const zz_pXModulus& F);
+void reduce(zz_pXNewArgument& H, const zz_pXModulus& F);
+
+void ProjectPowers(vec_zz_p& x, const vec_zz_p& a, long k,
+                   const zz_pXNewArgument& H, const zz_pXModulus& F);
+
+
+
+
 
 
 

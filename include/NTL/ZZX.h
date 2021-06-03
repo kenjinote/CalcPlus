@@ -23,25 +23,19 @@ vec_ZZ rep;
 ****************************************************************/
 
 
-ZZX()
+ZZX() { }
 //  initial value 0
 
-   { }
-
+explicit ZZX(long a) { *this = a; }
+explicit ZZX(const ZZ& a) { *this = a; }
 
 ZZX(INIT_SIZE_TYPE, long n) 
 // initial value 0, but space is pre-allocated for n coefficients
 
    { rep.SetMaxLength(n); }
 
-ZZX(const ZZX& a) : rep(a.rep) { }
-// initial value is a
-
-
-ZZX& operator=(const ZZX& a) 
-   { rep = a.rep; return *this; }
-
-~ZZX() { }
+// default copy constructor and assignment
+// default destructor
 
 void normalize();
 // strip leading zeros
@@ -73,6 +67,10 @@ static const ZZX& zero();
 inline ZZX(long i, const ZZ& c);
 inline ZZX(long i, long c);
 
+inline ZZX(INIT_MONO_TYPE, long i, const ZZ& c);
+inline ZZX(INIT_MONO_TYPE, long i, long c);
+inline ZZX(INIT_MONO_TYPE, long i);
+
 
 inline ZZX& operator=(long a);
 inline ZZX& operator=(const ZZ& a);
@@ -80,7 +78,13 @@ inline ZZX& operator=(const ZZ& a);
 
 ZZX(ZZX& x, INIT_TRANS_TYPE) : rep(x.rep, INIT_TRANS) { }
 
+void swap(ZZX& x) { rep.swap(x.rep); }
+// swap with x (only pointers are swapped)
+
 };
+
+
+NTL_DECLARE_RELOCATABLE((ZZX*))
 
 
 
@@ -135,15 +139,18 @@ void SetCoeff(ZZX& x, long i, const ZZ& a);
 // x[i] = a, error is raised if i < 0
 
 void SetCoeff(ZZX& x, long i, long a);
-
-inline ZZX::ZZX(long i, const ZZ& a)
-   { SetCoeff(*this, i, a); }
-
-inline ZZX::ZZX(long i, long a)
-   { SetCoeff(*this, i, a); }
+// x[i] = a, error is raised if i < 0
 
 void SetCoeff(ZZX& x, long i);
 // x[i] = 1, error is raised if i < 0
+
+inline ZZX::ZZX(long i, const ZZ& a) { SetCoeff(*this, i, a); }
+inline ZZX::ZZX(long i, long a) { SetCoeff(*this, i, a); }
+
+inline ZZX::ZZX(INIT_MONO_TYPE, long i, const ZZ& a) { SetCoeff(*this, i, a); }
+inline ZZX::ZZX(INIT_MONO_TYPE, long i, long a) { SetCoeff(*this, i, a); }
+inline ZZX::ZZX(INIT_MONO_TYPE, long i) { SetCoeff(*this, i); }
+
 
 void SetX(ZZX& x);
 // x is set to the monomial X
@@ -164,7 +171,7 @@ inline void set(ZZX& x)
 inline void swap(ZZX& x, ZZX& y)
 // swap x & y (only pointers are swapped)
 
-   { swap(x.rep, y.rep); }
+   { x.swap(y); }
 
 void trunc(ZZX& x, const ZZX& a, long m);
 // x = a % X^m
@@ -453,6 +460,12 @@ void HomSqr(ZZX& x, const ZZX& a);
 
 void SSMul(ZZX& x, const ZZX& a, const ZZX& b);
 void SSSqr(ZZX& x, const ZZX& a);
+
+void SSMul(ZZ_pX& x, const ZZ_pX& a, const ZZ_pX& b);
+void SSSqr(ZZ_pX& x, const ZZ_pX& a);
+
+void KarMul(ZZ_pX& x, const ZZ_pX& a, const ZZ_pX& b);
+void KarSqr(ZZ_pX& x, const ZZ_pX& a);
 
 double SSRatio(long na, long maxa, long nb, long maxb);
 

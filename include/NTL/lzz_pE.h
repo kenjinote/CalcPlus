@@ -16,54 +16,48 @@ private:
    zz_pEInfoT();                       // disabled
    zz_pEInfoT(const zz_pEInfoT&);   // disabled
    void operator=(const zz_pEInfoT&);  // disabled
-public:
-   long ref_count;
 
+public:
    zz_pEInfoT(const zz_pX&);
-   ~zz_pEInfoT() { }
 
    zz_pXModulus p;
 
-   ZZ   _card;
-   long _card_init;
    long _card_base;
    long _card_exp;
 
+   Lazy<ZZ>  _card;
 
 };
 
-extern zz_pEInfoT *zz_pEInfo; // info for current modulus, initially null
-
+extern 
+NTL_CHEAP_THREAD_LOCAL 
+zz_pEInfoT *zz_pEInfo; 
+// info for current modulus, initially null
+// fast TLS access
 
 
 
 class zz_pEContext {
 private:
-zz_pEInfoT *ptr;
+SmartPtr<zz_pEInfoT> ptr;
 
 public:
+
+zz_pEContext() { }
+explicit zz_pEContext(const zz_pX& p) : ptr(MakeSmart<zz_pEInfoT>(p)) { }
+
+// copy constructor, assignment, destructor: default
+
 void save();
 void restore() const;
-
-zz_pEContext() { ptr = 0; }
-zz_pEContext(const zz_pX& p);
-
-zz_pEContext(const zz_pEContext&); 
-
-
-zz_pEContext& operator=(const zz_pEContext&); 
-
-
-~zz_pEContext();
-
 
 };
 
 
 class zz_pEBak {
 private:
-long MustRestore;
-zz_pEInfoT *ptr;
+zz_pEContext c;
+bool MustRestore;
 
 zz_pEBak(const zz_pEBak&); // disabled
 void operator=(const zz_pEBak&); // disabled
@@ -72,7 +66,7 @@ public:
 void save();
 void restore();
 
-zz_pEBak() { MustRestore = 0; ptr = 0; }
+zz_pEBak() : MustRestore(false) {  }
 
 ~zz_pEBak();
 
@@ -81,14 +75,37 @@ zz_pEBak() { MustRestore = 0; ptr = 0; }
 
 
 
-struct zz_pE_NoAlloc_type { zz_pE_NoAlloc_type() { } };
-const zz_pE_NoAlloc_type zz_pE_NoAlloc = zz_pE_NoAlloc_type();
 
 
 
-class zz_pE {
+class zz_pEPush {
+private:
+zz_pEBak bak;
+
+zz_pEPush(const zz_pEPush&); // disabled
+void operator=(const zz_pEPush&); // disabled
 
 public:
+zz_pEPush() { bak.save(); }
+explicit zz_pEPush(const zz_pEContext& context) { bak.save(); context.restore(); }
+explicit zz_pEPush(const zz_pX& p) { bak.save(); zz_pEContext c(p); c.restore(); }
+
+
+};
+
+
+
+
+class zz_pEX; // forward declaration
+
+class zz_pE {
+public:
+typedef zz_pX rep_type;
+typedef zz_pEContext context_type;
+typedef zz_pEBak bak_type;
+typedef zz_pEPush push_type;
+typedef zz_pEX poly_type;
+
 
 zz_pX _zz_pE__rep;
 
@@ -99,21 +116,25 @@ static long ModCross() { return 8; }
 
 // ****** constructors and assignment
 
-zz_pE();
+zz_pE() {  } // NO_ALLOC
 
-zz_pE(const zz_pE& a)  { _zz_pE__rep.SetMaxLength(zz_pE::degree()); _zz_pE__rep = a._zz_pE__rep; }
+explicit zz_pE(long a) { *this = a;  } // NO_ALLOC
+explicit zz_pE(const zz_p& a) { *this = a;  } // NO_ALLOC
 
-zz_pE(zz_pE_NoAlloc_type) { }  // allocates no space
 
-~zz_pE() { } 
+zz_pE(INIT_NO_ALLOC_TYPE) { }  // allocates no space
+zz_pE(INIT_ALLOC_TYPE) {  _zz_pE__rep.rep.SetMaxLength(zz_pE::degree()); }  // allocates space
+void allocate() {  _zz_pE__rep.rep.SetMaxLength(zz_pE::degree()); }
 
-zz_pE& operator=(const zz_pE& a) { _zz_pE__rep = a._zz_pE__rep; return *this; }
+
 
 zz_pE(zz_pE& x, INIT_TRANS_TYPE) : _zz_pE__rep(x._zz_pE__rep, INIT_TRANS) { }
 
 
 // You can always access the _zz_pE__representation directly...if you dare.
 zz_pX& LoopHole() { return _zz_pE__rep; }
+
+void swap(zz_pE& x) { _zz_pE__rep.swap(x._zz_pE__rep); }
 
 
 static const zz_pXModulus& modulus() { return zz_pEInfo->p; }
@@ -134,6 +155,9 @@ inline zz_pE& operator=(const zz_p& a);
  
 };
 
+
+NTL_DECLARE_RELOCATABLE((zz_pE*))
+
 inline const zz_pX& _zz_pE__rep(const zz_pE& a) { return a._zz_pE__rep; }
 
 inline void clear(zz_pE& x)
@@ -147,7 +171,7 @@ inline void set(zz_pE& x)
 inline void swap(zz_pE& x, zz_pE& y)
 // swap x and y
 
-   { swap(x._zz_pE__rep, y._zz_pE__rep); }
+   { x.swap(y); }
 
 // ****** addition
 

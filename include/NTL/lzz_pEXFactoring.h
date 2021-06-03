@@ -36,13 +36,15 @@ inline zz_pE FindRoot(const zz_pEX& f)
 // assumes that f is monic and splits into distinct linear factors
 
 
-extern long zz_pEX_GCDTableSize; /* = 4 */
+extern 
+NTL_CHEAP_THREAD_LOCAL 
+long zz_pEX_GCDTableSize; /* = 4 */
 // Controls GCD blocking for NewDDF
 
-extern char zz_pEX_stem[]; 
-// Determines filename stem for external storage in NewDDF.
 
-extern double zz_pEXFileThresh; /* 128 */
+extern 
+NTL_CHEAP_THREAD_LOCAL 
+double zz_pEXFileThresh; 
 // external files are used for baby/giant steps if size
 // of these tables exceeds zz_pEXFileThresh KB.
 

@@ -58,7 +58,7 @@ enum
 typedef struct
 {
 	TCHAR szText[4];
-	int id;
+	LONG_PTR id;
 	RECT rect;
 }Button;
 

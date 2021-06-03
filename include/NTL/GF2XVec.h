@@ -42,8 +42,8 @@ public:
    void SetSize(long n, long d);
    void kill();
 
-   GF2XVec() { v = 0; len = 0; bsize = 0; }
-   GF2XVec(long n, long d) { v = 0; len = 0; bsize = 0; SetSize(n, d); }
+   GF2XVec() : v(0), len(0), bsize(0) { }
+   GF2XVec(long n, long d) : v(0), len(0), bsize(0)  { SetSize(n, d); }
    ~GF2XVec() { kill(); };
 
    GF2X* elts() { return v; }
@@ -52,11 +52,42 @@ public:
    GF2X& operator[](long i) { return v[i]; }
    const GF2X& operator[](long i) const { return v[i]; }
 
-   static void swap_impl(GF2XVec& x, GF2XVec& y);
+   void swap(GF2XVec& x)
+   {
+      _ntl_swap(v, x.v);
+      _ntl_swap(len, x.len);
+      _ntl_swap(bsize, x.bsize);
+   }
+
+   void move(GF2XVec& other) 
+   { 
+      GF2XVec tmp;
+      tmp.swap(other);
+      tmp.swap(*this);
+   }
+
+
+#if (NTL_CXX_STANDARD >= 2011 && !defined(NTL_DISABLE_MOVE))
+
+   GF2XVec(GF2XVec&& other) noexcept : GF2XVec() 
+   {
+      this->move(other);
+   }
+
+   GF2XVec& operator=(GF2XVec&& other) noexcept
+   {
+      this->move(other);
+      return *this;
+   }
+
+#endif
+
 };
 
-inline void swap(GF2XVec& x, GF2XVec& y)
-   { GF2XVec::swap_impl(x, y); }
+
+NTL_DECLARE_RELOCATABLE((GF2XVec*))
+
+inline void swap(GF2XVec& x, GF2XVec& y) { x.swap(y); }
 
 NTL_CLOSE_NNS
 

@@ -15,11 +15,15 @@ public:
    T b;  
   
    Pair() { }  
-   Pair(const Pair<S,T>& x) : a(x.a), b(x.b) { } 
    Pair(const S& x, const T& y) : a(x), b(y) { }  
-   Pair<S,T>& operator=(const Pair<S,T>& x) { a = x.a; b = x.b; return *this; } 
-   ~Pair() { }  
+
 };  
+
+template<class S, class T> NTL_DECLARE_RELOCATABLE_WHEN((Pair<S,T>*))
+   { return DeclareRelocatableType((S*)0) &&
+            DeclareRelocatableType((T*)0); }
+// FIXME: remove CV-qualifiers and S and T? 
+
   
 template<class S, class T>
 inline Pair<S,T> cons(const S& x, const T& y) { return Pair<S,T>(x, y); } 
@@ -40,8 +44,10 @@ template<class S, class T>
 NTL_SNS istream& operator>>(NTL_SNS istream& s, Pair<S,T>& x)  
 {  
    long c;  
+   S a;
+   T b;
   
-   if (!s) Error("bad pair input");  
+   if (!s) NTL_INPUT_ERROR(s, "bad pair input");  
   
    c = s.peek();  
    while (IsWhiteSpace(c)) {  
@@ -50,14 +56,14 @@ NTL_SNS istream& operator>>(NTL_SNS istream& s, Pair<S,T>& x)
    }  
   
    if (c != '[')  
-      Error("bad pair input");  
+      NTL_INPUT_ERROR(s, "bad pair input");  
   
    s.get();  
   
-   if (!(s >> x.a))   
-      Error("bad pair input");  
-   if (!(s >> x.b))  
-      Error("bad pair input");  
+   if (!(s >> a))   
+      NTL_INPUT_ERROR(s, "bad pair input");  
+   if (!(s >> b))  
+      NTL_INPUT_ERROR(s, "bad pair input");  
   
    c = s.peek();  
    while (IsWhiteSpace(c)) {  
@@ -66,10 +72,12 @@ NTL_SNS istream& operator>>(NTL_SNS istream& s, Pair<S,T>& x)
    }  
   
    if (c != ']')  
-      Error("bad pair input");  
+      NTL_INPUT_ERROR(s, "bad pair input");  
   
    s.get();  
-  
+
+   x.a = a;
+   x.b = b;
    return s;  
 }  
   

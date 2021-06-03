@@ -35,6 +35,11 @@ inline mat_ZZ_pE ident_mat_ZZ_pE(long n)
    { mat_ZZ_pE X; ident(X, n); NTL_OPT_RETURN(mat_ZZ_pE, X); }
 
 
+void random(mat_ZZ_pE& x, long n, long m);
+inline mat_ZZ_pE random_mat_ZZ_pE(long n, long m)
+   { mat_ZZ_pE x; random(x, n, m); NTL_OPT_RETURN(mat_ZZ_pE, x); }
+
+
 void determinant(ZZ_pE& d, const mat_ZZ_pE& A);
 inline ZZ_pE determinant(const mat_ZZ_pE& A)
    {  ZZ_pE d; determinant(d, A); NTL_OPT_RETURN(ZZ_pE, d); }
@@ -45,8 +50,8 @@ void transpose(mat_ZZ_pE& X, const mat_ZZ_pE& A);
 inline mat_ZZ_pE transpose(const mat_ZZ_pE& A)
    { mat_ZZ_pE X; transpose(X, A); NTL_OPT_RETURN(mat_ZZ_pE, X); }
 
-void solve(ZZ_pE& d, vec_ZZ_pE& X,
-           const mat_ZZ_pE& A, const vec_ZZ_pE& b);
+void solve(ZZ_pE& d, vec_ZZ_pE& x, const mat_ZZ_pE& A, const vec_ZZ_pE& b);
+void solve(ZZ_pE& d, const mat_ZZ_pE& A, vec_ZZ_pE& x, const vec_ZZ_pE& b);
 
 void inv(ZZ_pE& d, mat_ZZ_pE& X, const mat_ZZ_pE& A);
 

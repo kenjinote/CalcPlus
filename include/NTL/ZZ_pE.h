@@ -12,57 +12,55 @@ NTL_OPEN_NNS
 
 class ZZ_pEInfoT {
 private:
+
    ZZ_pEInfoT();                       // disabled
    ZZ_pEInfoT(const ZZ_pEInfoT&);   // disabled
    void operator=(const ZZ_pEInfoT&);  // disabled
 public:
-   long ref_count;
 
    ZZ_pEInfoT(const ZZ_pX&);
-   ~ZZ_pEInfoT() { }
 
    ZZ_pXModulus p;
 
-   ZZ   _card;
-   long _card_init;
    ZZ   _card_base;
    long _card_exp;
+
+   Lazy<ZZ>  _card;
 
 
 };
 
-extern ZZ_pEInfoT *ZZ_pEInfo; // info for current modulus, initially null
+extern
+NTL_CHEAP_THREAD_LOCAL 
+ZZ_pEInfoT *ZZ_pEInfo; 
+// info for current modulus, initially null
+// raw pointer for faster TLS access
+
 
 
 
 
 class ZZ_pEContext {
 private:
-ZZ_pEInfoT *ptr;
+SmartPtr<ZZ_pEInfoT> ptr;
 
 public:
+
+ZZ_pEContext() { }
+explicit ZZ_pEContext(const ZZ_pX& p) : ptr(MakeSmart<ZZ_pEInfoT>(p)) { }
+
+// copy constructor, assignment, destructor: default
+
 void save();
 void restore() const;
-
-ZZ_pEContext() { ptr = 0; }
-ZZ_pEContext(const ZZ_pX& p);
-
-ZZ_pEContext(const ZZ_pEContext&); 
-
-
-ZZ_pEContext& operator=(const ZZ_pEContext&); 
-
-
-~ZZ_pEContext();
-
 
 };
 
 
 class ZZ_pEBak {
 private:
-long MustRestore;
-ZZ_pEInfoT *ptr;
+ZZ_pEContext c;
+bool MustRestore;
 
 ZZ_pEBak(const ZZ_pEBak&); // disabled
 void operator=(const ZZ_pEBak&); // disabled
@@ -71,7 +69,7 @@ public:
 void save();
 void restore();
 
-ZZ_pEBak() { MustRestore = 0; ptr = 0; }
+ZZ_pEBak() : MustRestore(false) {  }
 
 ~ZZ_pEBak();
 
@@ -80,14 +78,38 @@ ZZ_pEBak() { MustRestore = 0; ptr = 0; }
 
 
 
-struct ZZ_pE_NoAlloc_type { ZZ_pE_NoAlloc_type() { } };
-const ZZ_pE_NoAlloc_type ZZ_pE_NoAlloc = ZZ_pE_NoAlloc_type();
 
+
+class ZZ_pEPush {
+private:
+ZZ_pEBak bak;
+
+ZZ_pEPush(const ZZ_pEPush&); // disabled
+void operator=(const ZZ_pEPush&); // disabled
+
+public:
+ZZ_pEPush() { bak.save(); }
+explicit ZZ_pEPush(const ZZ_pEContext& context) { bak.save(); context.restore(); }
+explicit ZZ_pEPush(const ZZ_pX& p) { bak.save(); ZZ_pEContext c(p); c.restore(); }
+
+
+};
+
+
+
+
+
+class ZZ_pEX;  // forward declaration
 
 
 class ZZ_pE {
-
 public:
+typedef ZZ_pX rep_type;
+typedef ZZ_pEContext context_type;
+typedef ZZ_pEBak bak_type;
+typedef ZZ_pEPush push_type;
+typedef ZZ_pEX poly_type;
+
 
 ZZ_pX _ZZ_pE__rep;
 
@@ -100,20 +122,24 @@ static long ModCross() { return 8; }
 
 // ****** constructors and assignment
 
-ZZ_pE();
+ZZ_pE() {  } // NO_ALLOC
 
-ZZ_pE(const ZZ_pE& a)  { _ZZ_pE__rep.rep.SetMaxLength(ZZ_pE::degree()); _ZZ_pE__rep = a._ZZ_pE__rep; }
+explicit ZZ_pE(long a) { *this = a;  } // NO_ALLOC
+explicit ZZ_pE(const ZZ_p& a) { *this = a;  } // NO_ALLOC
 
-ZZ_pE(ZZ_pE_NoAlloc_type) { }  // allocates no space
 
-~ZZ_pE() { } 
 
-ZZ_pE& operator=(const ZZ_pE& a) { _ZZ_pE__rep = a._ZZ_pE__rep; return *this; }
+ZZ_pE(INIT_NO_ALLOC_TYPE) { }  // allocates no space
+ZZ_pE(INIT_ALLOC_TYPE) {_ZZ_pE__rep.rep.SetMaxLength(ZZ_pE::degree());  }  // allocates space
+void allocate() { _ZZ_pE__rep.rep.SetMaxLength(ZZ_pE::degree()); }
+
 
 inline ZZ_pE& operator=(long a);
 inline ZZ_pE& operator=(const ZZ_p& a);
 
 ZZ_pE(ZZ_pE& x, INIT_TRANS_TYPE) : _ZZ_pE__rep(x._ZZ_pE__rep, INIT_TRANS) { }
+
+void swap(ZZ_pE& x) { _ZZ_pE__rep.swap(x._ZZ_pE__rep); }
 
 
 // You can always access the _ZZ_pE__representation directly...if you dare.
@@ -132,7 +158,12 @@ static long initialized() { return (ZZ_pEInfo != 0); }
 static void init(const ZZ_pX&);
 
 
+
 };
+
+
+
+NTL_DECLARE_RELOCATABLE((ZZ_pE*))
 
 
 
@@ -151,7 +182,7 @@ inline void set(ZZ_pE& x)
 inline void swap(ZZ_pE& x, ZZ_pE& y)
 // swap x and y
 
-   { swap(x._ZZ_pE__rep, y._ZZ_pE__rep); }
+   { x.swap(y); }
 
 // ****** addition
 

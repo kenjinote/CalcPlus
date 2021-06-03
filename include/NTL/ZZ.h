@@ -17,24 +17,38 @@
 
 #include <NTL/lip.h>
 #include <NTL/tools.h>
+#include <NTL/vector.h>
+#include <NTL/SmartPtr.h>
+#include <NTL/sp_arith.h>
 
 NTL_OPEN_NNS
 
 
-
+class ZZ_p; // forward declaration
+class ZZX;
 
 class ZZ {
 public:
-
-NTL_verylong rep; // This is currently public for "emergency" situations
-                   // May be private in future versions.
-
-
-ZZ() : rep(0) { }
-// initial value is 0.
+typedef ZZ_p residue_type;
+typedef ZZX poly_type;
 
 
-ZZ(INIT_SIZE_TYPE, long k) : rep(0)
+
+class Deleter {
+public:
+   static void apply(_ntl_gbigint p) { _ntl_gfree(p); }
+};
+
+WrappedPtr<_ntl_gbigint_body, Deleter> rep;
+// This is currently public for "emergency" situations
+// May be private in future versions.
+
+ZZ() { }
+
+
+explicit ZZ(long a) { *this = a; }
+
+ZZ(INIT_SIZE_TYPE, long k) 
 // initial value is 0, but space is pre-allocated so that numbers
 // x with x.size() <= k can be stored without re-allocation.
 // Call with ZZ(INIT_SIZE, k).
@@ -43,50 +57,81 @@ ZZ(INIT_SIZE_TYPE, long k) : rep(0)
 
 
 {
-   NTL_zsetlength(&rep, k); 
+   _ntl_gsetlength(&rep, k); 
 }
 
-ZZ(const ZZ& a) : rep(0)
+ZZ(const ZZ& a) 
 // initial value is a.
 
 {
-   NTL_zcopy(a.rep, &rep);
+   _ntl_gcopy(a.rep, &rep);
 }
 
 
-ZZ(INIT_VAL_TYPE, long a) : rep(0) { NTL_zintoz(a, &rep); }
-ZZ(INIT_VAL_TYPE, int a) : rep(0) { NTL_zintoz(a, &rep); }
+ZZ(INIT_VAL_TYPE, long a)  { _ntl_gintoz(a, &rep); }
+ZZ(INIT_VAL_TYPE, int a)  { _ntl_gintoz(a, &rep); }
 
-ZZ(INIT_VAL_TYPE, unsigned long a) : rep(0) { NTL_zuintoz(a, &rep); }
-ZZ(INIT_VAL_TYPE, unsigned int a) : rep(0) { NTL_zuintoz((unsigned long) a, &rep); }
+ZZ(INIT_VAL_TYPE, unsigned long a)  { _ntl_guintoz(a, &rep); }
+ZZ(INIT_VAL_TYPE, unsigned int a)  { _ntl_guintoz((unsigned long) a, &rep); }
 
 inline ZZ(INIT_VAL_TYPE, const char *);
 inline ZZ(INIT_VAL_TYPE, float);
 inline ZZ(INIT_VAL_TYPE, double);
 
 
-ZZ& operator=(const ZZ& a) { NTL_zcopy(a.rep, &rep); return *this; }
+ZZ& operator=(const ZZ& a) { _ntl_gcopy(a.rep, &rep); return *this; }
 
-ZZ& operator=(long a) { NTL_zintoz(a, &rep); return *this; }
+ZZ& operator=(long a) { _ntl_gintoz(a, &rep); return *this; }
 
-
-~ZZ() { NTL_zfree(&rep); }
 
 void kill()
 // force the space held by this ZZ to be released.
 // The value then becomes 0.
 
-{ NTL_zfree(&rep); }
+{ rep.kill(); }
+
+
+void swap(ZZ& x)
+{ _ntl_gswap(&rep, &x.rep); }
+
+bool pinned() const
+{
+   return _ntl_PINNED(rep);
+}
+
+
+#if (NTL_CXX_STANDARD >= 2011 && !defined(NTL_DISABLE_MOVE))
+
+ZZ(ZZ&& a) NTL_FAKE_NOEXCEPT
+{
+   *this = std::move(a);
+}
+
+ZZ& operator=(ZZ&& a) NTL_FAKE_NOEXCEPT
+{
+   if (pinned() || a.pinned()) {
+      _ntl_gcopy(a.rep, &rep);
+   }
+   else {
+      rep.move(a.rep);
+   }
+
+   return *this;
+}
+
+
+#endif
+
 
 void SetSize(long k)
 // pre-allocates space for k-digit numbers (base 2^NTL_ZZ_NBITS);  
 // does not change the value.
 
-{ NTL_zsetlength(&rep, k); }
+{ _ntl_gsetlength(&rep, k); }
 
 long size() const
 // returns the number of (NTL_ZZ_NBIT-bit) digits of |a|; the size of 0 is 0.
-   { return NTL_zsize(rep); }
+   { return _ntl_gsize(rep); }
 
 long null() const
 // test of rep is null
@@ -94,28 +139,57 @@ long null() const
 
 long MaxAlloc() const
 // returns max allocation request, possibly rounded up a bit...
-   { return NTL_zmaxalloc(rep); }
+   { return _ntl_gmaxalloc(rep); }
 
 
 long SinglePrecision() const
-   { return NTL_zsptest(rep); }
+   { return _ntl_gsptest(rep); }
 
 // tests if less than NTL_SP_BOUND in absolute value
 
 long WideSinglePrecision() const
-   { return NTL_zwsptest(rep); }
+   { return _ntl_gwsptest(rep); }
 
 // tests if less than NTL_WSP_BOUND in absolute value
 
 static const ZZ& zero();
 
 
-ZZ(ZZ& x, INIT_TRANS_TYPE) { rep = x.rep; x.rep = 0; }
+ZZ(ZZ& x, INIT_TRANS_TYPE) { rep.swap(x.rep); }
 // used to cheaply hand off memory management of return value,
 // without copying, assuming compiler implements the
-// "return value optimization"
+// "return value optimization".  This is probably obsolete by
+// now, as modern compilers can and should optimize
+// the copy constructor in the situations where this is used.
+// This should only be used for simple, local variables
+// that are not be subject to special memory management.
+
+
+// mainly for internal consumption by ZZWatcher
+
+void KillBig() { if (MaxAlloc() > NTL_RELEASE_THRESH) kill(); }
+
+
+long validate() { return _ntl_gvalidate(rep); }
 
 };
+
+
+NTL_DECLARE_RELOCATABLE((ZZ*))
+
+
+class ZZWatcher {
+public:
+   ZZ& watched;
+   explicit
+   ZZWatcher(ZZ& _watched) : watched(_watched) {}
+
+   ~ZZWatcher() { watched.KillBig(); }
+};
+
+#define NTL_ZZRegister(x) NTL_TLS_LOCAL(ZZ, x); ZZWatcher _WATCHER__ ## x(x)
+
+
 
 
 
@@ -125,22 +199,22 @@ const ZZ& ZZ_expo(long e);
 inline void clear(ZZ& x)
 // x = 0
 
-   { NTL_zzero(&x.rep); }
+   { _ntl_gzero(&x.rep); }
 
 inline void set(ZZ& x)
 // x = 1
 
-   { NTL_zone(&x.rep); }
+   { _ntl_gone(&x.rep); }
 
 
 inline void swap(ZZ& x, ZZ& y)
 // swap the values of x and y (swaps pointers only)
 
-   { NTL_zswap(&x.rep, &y.rep); }
+   { x.swap(y); }
 
 
 inline double log(const ZZ& a)
-   { return NTL_zlog(a.rep); }
+   { return _ntl_glog(a.rep); }
 
 
 
@@ -156,63 +230,62 @@ inline double log(const ZZ& a)
 inline void conv(ZZ& x, const ZZ& a) { x = a; }
 inline ZZ to_ZZ(const ZZ& a) { return a; }
 
-inline void conv(ZZ& x, long a) { NTL_zintoz(a, &x.rep); }
+inline void conv(ZZ& x, long a) { _ntl_gintoz(a, &x.rep); }
 inline ZZ to_ZZ(long a) { return ZZ(INIT_VAL, a); }
 
-inline void conv(ZZ& x, int a) { NTL_zintoz(long(a), &x.rep); }
+inline void conv(ZZ& x, int a) { _ntl_gintoz(long(a), &x.rep); }
 inline ZZ to_ZZ(int a) { return ZZ(INIT_VAL, a); }
 
-inline void conv(ZZ& x, unsigned long a) { NTL_zuintoz(a, &x.rep); }
+inline void conv(ZZ& x, unsigned long a) { _ntl_guintoz(a, &x.rep); }
 inline ZZ to_ZZ(unsigned long a) { return ZZ(INIT_VAL, a); }
 
-inline void conv(ZZ& x, unsigned int a) { NTL_zuintoz((unsigned long)(a), &x.rep); }
+inline void conv(ZZ& x, unsigned int a) { _ntl_guintoz((unsigned long)(a), &x.rep); }
 inline ZZ to_ZZ(unsigned int a) { return ZZ(INIT_VAL, a); }
 
-void conv(ZZ& x, const char *s);
-inline ZZ::ZZ(INIT_VAL_TYPE, const char *s) : rep(0) { conv(*this, s); }
+inline ZZ::ZZ(INIT_VAL_TYPE, const char *s)  { conv(*this, s); }
 inline ZZ to_ZZ(const char *s) { return ZZ(INIT_VAL, s); }
 
-inline void conv(ZZ& x, double a) { NTL_zdoubtoz(a, &x.rep); }
-inline ZZ::ZZ(INIT_VAL_TYPE, double a) : rep(0) { conv(*this, a); }
+inline void conv(ZZ& x, double a) { _ntl_gdoubtoz(a, &x.rep); }
+inline ZZ::ZZ(INIT_VAL_TYPE, double a)  { conv(*this, a); }
 inline ZZ to_ZZ(double a) { return ZZ(INIT_VAL, a); }
 
-inline void conv(ZZ& x, float a) { NTL_zdoubtoz(double(a), &x.rep); }
-inline ZZ::ZZ(INIT_VAL_TYPE, float a) : rep(0) { conv(*this, a); }
+inline void conv(ZZ& x, float a) { _ntl_gdoubtoz(double(a), &x.rep); }
+inline ZZ::ZZ(INIT_VAL_TYPE, float a)  { conv(*this, a); }
 inline ZZ to_ZZ(float a) { return ZZ(INIT_VAL, a); }
 
-inline void conv(long& x, const ZZ& a) { x = NTL_ztoint(a.rep); }
-inline long to_long(const ZZ& a)  { return NTL_ztoint(a.rep); }
+inline void conv(long& x, const ZZ& a) { x = _ntl_gtoint(a.rep); }
+inline long to_long(const ZZ& a)  { return _ntl_gtoint(a.rep); }
 
 inline void conv(int& x, const ZZ& a) 
-   { unsigned int res = (unsigned int) NTL_ztouint(a.rep); 
+   { unsigned int res = (unsigned int) _ntl_gtouint(a.rep); 
      x = NTL_UINT_TO_INT(res); }
 
 inline int to_int(const ZZ& a)  
-   { unsigned int res = (unsigned int) NTL_ztouint(a.rep); 
+   { unsigned int res = (unsigned int) _ntl_gtouint(a.rep); 
      return NTL_UINT_TO_INT(res); }
 
-inline void conv(unsigned long& x, const ZZ& a) { x = NTL_ztouint(a.rep); }
-inline unsigned long to_ulong(const ZZ& a)  { return NTL_ztouint(a.rep); }
+inline void conv(unsigned long& x, const ZZ& a) { x = _ntl_gtouint(a.rep); }
+inline unsigned long to_ulong(const ZZ& a)  { return _ntl_gtouint(a.rep); }
 
 inline void conv(unsigned int& x, const ZZ& a) 
-   { x = (unsigned int)(NTL_ztouint(a.rep)); }
+   { x = (unsigned int)(_ntl_gtouint(a.rep)); }
 inline unsigned int to_uint(const ZZ& a)  
-   { return (unsigned int)(NTL_ztouint(a.rep)); }
+   { return (unsigned int)(_ntl_gtouint(a.rep)); }
 
-inline void conv(double& x, const ZZ& a) { x = NTL_zdoub(a.rep); }
-inline double to_double(const ZZ& a) { return NTL_zdoub(a.rep); }
+inline void conv(double& x, const ZZ& a) { x = _ntl_gdoub(a.rep); }
+inline double to_double(const ZZ& a) { return _ntl_gdoub(a.rep); }
 
-inline void conv(float& x, const ZZ& a) { x = float(NTL_zdoub(a.rep)); }
-inline float to_float(const ZZ& a) { return float(NTL_zdoub(a.rep)); }
+inline void conv(float& x, const ZZ& a) { x = float(_ntl_gdoub(a.rep)); }
+inline float to_float(const ZZ& a) { return float(_ntl_gdoub(a.rep)); }
 
 inline void ZZFromBytes(ZZ& x, const unsigned char *p, long n)
-   { NTL_zfrombytes(&x.rep, p, n); }
+   { _ntl_gfrombytes(&x.rep, p, n); }
 
 inline ZZ ZZFromBytes(const unsigned char *p, long n)
    { ZZ x; ZZFromBytes(x, p, n); NTL_OPT_RETURN(ZZ, x); }
 
 inline void BytesFromZZ(unsigned char *p, const ZZ& a, long n)
-   { NTL_zbytesfromz(p, a.rep, n); }
+   { _ntl_gbytesfromz(p, a.rep, n); }
 
 
 
@@ -223,53 +296,53 @@ inline void BytesFromZZ(unsigned char *p, const ZZ& a, long n)
 inline long sign(const ZZ& a)
 // returns the sign of a (-1, 0, or 1).
 
-   { return NTL_zsign(a.rep); }
+   { return _ntl_gsign(a.rep); }
 
 
 inline long compare(const ZZ& a, const ZZ& b)
 // returns the sign of a-b (-1, 0, or 1).
 
 {
-   return NTL_zcompare(a.rep, b.rep);
+   return _ntl_gcompare(a.rep, b.rep);
 }
 
 inline long IsZero(const ZZ& a)
 // zero test
 
-   { return NTL_ziszero(a.rep); }
+   { return _ntl_giszero(a.rep); }
 
 
 inline long IsOne(const ZZ& a)
-   { return NTL_zisone(a.rep); }
+   { return _ntl_gisone(a.rep); }
 // test for 1
    
 
 /* the usual comparison operators */
 
 inline long operator==(const ZZ& a, const ZZ& b)
-  { return NTL_zcompare(a.rep, b.rep) == 0; }
+  { return _ntl_gcompare(a.rep, b.rep) == 0; }
 inline long operator!=(const ZZ& a, const ZZ& b)
-  { return NTL_zcompare(a.rep, b.rep) != 0; }
+  { return _ntl_gcompare(a.rep, b.rep) != 0; }
 inline long operator<(const ZZ& a, const ZZ& b)
-  { return NTL_zcompare(a.rep, b.rep) < 0; }
+  { return _ntl_gcompare(a.rep, b.rep) < 0; }
 inline long operator>(const ZZ& a, const ZZ& b)
-  { return NTL_zcompare(a.rep, b.rep) > 0; }
+  { return _ntl_gcompare(a.rep, b.rep) > 0; }
 inline long operator<=(const ZZ& a, const ZZ& b)
-  { return NTL_zcompare(a.rep, b.rep) <= 0; }
+  { return _ntl_gcompare(a.rep, b.rep) <= 0; }
 inline long operator>=(const ZZ& a, const ZZ& b)
-  { return NTL_zcompare(a.rep, b.rep) >= 0; }
+  { return _ntl_gcompare(a.rep, b.rep) >= 0; }
 
 /* single-precision versions of the above */
 
-inline long compare(const ZZ& a, long b) { return NTL_zscompare(a.rep, b); }
-inline long compare(long a, const ZZ& b) { return -NTL_zscompare(b.rep, a); }
+inline long compare(const ZZ& a, long b) { return _ntl_gscompare(a.rep, b); }
+inline long compare(long a, const ZZ& b) { return -_ntl_gscompare(b.rep, a); }
 
-inline long operator==(const ZZ& a, long b) { return NTL_zscompare(a.rep, b) == 0; }
-inline long operator!=(const ZZ& a, long b) { return NTL_zscompare(a.rep, b) != 0; }
-inline long operator<(const ZZ& a, long b) { return NTL_zscompare(a.rep, b) < 0; }
-inline long operator>(const ZZ& a, long b) { return NTL_zscompare(a.rep, b) > 0; }
-inline long operator<=(const ZZ& a, long b) { return NTL_zscompare(a.rep, b) <= 0; }
-inline long operator>=(const ZZ& a, long b) { return NTL_zscompare(a.rep, b) >= 0; }
+inline long operator==(const ZZ& a, long b) { return _ntl_gscompare(a.rep, b) == 0; }
+inline long operator!=(const ZZ& a, long b) { return _ntl_gscompare(a.rep, b) != 0; }
+inline long operator<(const ZZ& a, long b) { return _ntl_gscompare(a.rep, b) < 0; }
+inline long operator>(const ZZ& a, long b) { return _ntl_gscompare(a.rep, b) > 0; }
+inline long operator<=(const ZZ& a, long b) { return _ntl_gscompare(a.rep, b) <= 0; }
+inline long operator>=(const ZZ& a, long b) { return _ntl_gscompare(a.rep, b) >= 0; }
 
 
 inline long operator==(long a, const ZZ& b) { return b == a; }
@@ -289,38 +362,41 @@ inline long operator>=(long a, const ZZ& b) { return b <= a; }
 inline void add(ZZ& x, const ZZ& a, const ZZ& b)
 // x = a + b
 
-   { NTL_zadd(a.rep, b.rep, &x.rep); }
+   { _ntl_gadd(a.rep, b.rep, &x.rep); }
 
 inline void sub(ZZ& x, const ZZ& a, const ZZ& b)
 // x = a - b
 
-   { NTL_zsub(a.rep, b.rep, &x.rep); }
+   { _ntl_gsub(a.rep, b.rep, &x.rep); }
 
 inline void SubPos(ZZ& x, const ZZ& a, const ZZ& b)
 // x = a - b;  assumes a >= b >= 0.
 
-   { NTL_zsubpos(a.rep, b.rep, &x.rep); }
+   { _ntl_gsubpos(a.rep, b.rep, &x.rep); }
 
 inline void negate(ZZ& x, const ZZ& a)
 // x = -a
 
-   { NTL_zcopy(a.rep, &x.rep); NTL_znegate(&x.rep); }
+   { _ntl_gcopy(a.rep, &x.rep); _ntl_gnegate(&x.rep); }
 
 inline void abs(ZZ& x, const ZZ& a)
 // x = |a|
-{ NTL_zcopy(a.rep, &x.rep); NTL_zabs(&x.rep); }
+{ _ntl_gcopy(a.rep, &x.rep); _ntl_gabs(&x.rep); }
 
 
 /* single-precision versions of the above */
 
 inline void add(ZZ& x, const ZZ& a, long b)
-   { NTL_zsadd(a.rep, b, &x.rep); }
+   { _ntl_gsadd(a.rep, b, &x.rep); }
 
 inline void add(ZZ& x, long a, const ZZ& b) { add(x, b, a); }
 
 
-void sub(ZZ& x, const ZZ& a, long b);
+inline void sub(ZZ& x, const ZZ& a, long b)
+   { _ntl_gssub(a.rep, b, &x.rep); }
+
 void sub(ZZ& x, long a, const ZZ& b);
+// defined in ZZ.cpp
 
 /* operator/function notation */
 
@@ -384,13 +460,13 @@ inline void operator--(ZZ& x, int) { add(x, x, -1); }
 inline void mul(ZZ& x, const ZZ& a, const ZZ& b)
 // x = a * b
 
-   { NTL_zmul(a.rep, b.rep, &x.rep); }
+   { _ntl_gmul(a.rep, b.rep, &x.rep); }
 
 
 inline void sqr(ZZ& x, const ZZ& a)
 // x = a*a
 
-   { NTL_zsq(a.rep, &x.rep); }
+   { _ntl_gsq(a.rep, &x.rep); }
 
 inline ZZ sqr(const ZZ& a)
    { ZZ x; sqr(x, a); NTL_OPT_RETURN(ZZ, x); }
@@ -399,7 +475,7 @@ inline ZZ sqr(const ZZ& a)
 /* single-precision versions */
 
 inline void mul(ZZ& x, const ZZ& a, long b)
-   { NTL_zsmul(a.rep, b, &x.rep); }
+   { _ntl_gsmul(a.rep, b, &x.rep); }
 
 inline void mul(ZZ& x, long a, const ZZ& b)
     { mul(x, b, a); }
@@ -428,13 +504,13 @@ inline ZZ& operator*=(ZZ& x, long a)
 inline void
 MulAddTo(ZZ& x, const ZZ& a, long b)
 {
-   NTL_zsaddmul(a.rep, b, &x.rep);
+   _ntl_gsaddmul(a.rep, b, &x.rep);
 }
 
 inline void
 MulAddTo(ZZ& x, const ZZ& a, const ZZ& b)
 {
-   NTL_zaddmul(a.rep, b.rep, &x.rep);
+   _ntl_gaddmul(a.rep, b.rep, &x.rep);
 }
 
 // x -= a*b
@@ -442,48 +518,114 @@ MulAddTo(ZZ& x, const ZZ& a, const ZZ& b)
 inline void
 MulSubFrom(ZZ& x, const ZZ& a, long b)
 {
-   NTL_zssubmul(a.rep, b, &x.rep);
+   _ntl_gssubmul(a.rep, b, &x.rep);
 }
 
 inline void
 MulSubFrom(ZZ& x, const ZZ& a, const ZZ& b)
 {
-   NTL_zsubmul(a.rep, b.rep, &x.rep);
+   _ntl_gsubmul(a.rep, b.rep, &x.rep);
 }
 
 
+
 // Special routines for implementing CRT in ZZ_pX arithmetic
+// These are verbose, but fairly boilerplate
 
 
-inline void ZZ_p_crt_struct_init(void **crt_struct, long n, const ZZ& p, 
-                                 const long *primes)
-    { NTL_crt_struct_init(crt_struct, n, p.rep, primes); }
 
-inline void ZZ_p_crt_struct_insert(void *crt_struct, long i, const ZZ& m)
-   { NTL_crt_struct_insert(crt_struct, i, m.rep); }
+class ZZ_CRTStructAdapter;
+class ZZ_RemStructAdapter;
 
-inline void ZZ_p_crt_struct_free(void *crt_struct)
-   { NTL_crt_struct_free(crt_struct); }
+class ZZ_TmpVecAdapter {
+public:
+   UniquePtr<_ntl_tmp_vec> rep;
 
-inline void ZZ_p_crt_struct_eval(void *crt_struct, ZZ& t, const long *a)
-   { NTL_crt_struct_eval(crt_struct, &t.rep, a); }
-
-inline long ZZ_p_crt_struct_special(void *crt_struct)
-   { return NTL_crt_struct_special(crt_struct); }
-
-// Special routines for fast remaindering
+   inline void fetch(const ZZ_CRTStructAdapter&);
+   inline void fetch(ZZ_CRTStructAdapter&);
+   inline void fetch(const ZZ_RemStructAdapter&);
+};
 
 
-inline void ZZ_p_rem_struct_init(void **rem_struct, long n, 
-                                 const ZZ& p, long *primes)
-   { NTL_rem_struct_init(rem_struct, n, p.rep, primes); }
+class ZZ_CRTStructAdapter {
+public:
+   UniquePtr<_ntl_crt_struct> rep;
 
-inline void ZZ_p_rem_struct_free(void *rem_struct)
-   { NTL_rem_struct_free(rem_struct); }
+   void init(long n, const ZZ& p, long (*primes)(long))
+   {
+      rep.reset(_ntl_crt_struct_build(n, p.rep, primes));
+   }
+
+   void insert(long i, const ZZ& m)
+   {
+       rep->insert(i, m.rep);
+   }
+
+   void eval(ZZ& t, const long *a, ZZ_TmpVecAdapter& tmp_vec) const
+   {
+      rep->eval(&t.rep, a, tmp_vec.rep.get());
+   }
+
+   bool special() const
+   { 
+      return rep->special();
+   }
+};
 
 
-inline void ZZ_p_rem_struct_eval(void *rem_struct, long *x, const ZZ& a)
-   { NTL_rem_struct_eval(rem_struct, x, a.rep); }
+class ZZ_RemStructAdapter {
+public:
+   UniquePtr<_ntl_rem_struct> rep;
+
+   void init(long n, const ZZ& p, long (*primes)(long))
+   {
+      rep.reset(_ntl_rem_struct_build(n, p.rep, primes));
+   }
+
+   void eval(long *x, const ZZ& a, ZZ_TmpVecAdapter& tmp_vec) const
+   {
+      rep->eval(x, a.rep, tmp_vec.rep.get());
+   }
+};
+
+
+inline void ZZ_TmpVecAdapter::fetch(const ZZ_CRTStructAdapter& crt_struct)
+{
+   rep.reset(crt_struct.rep->fetch()); 
+}
+
+inline void ZZ_TmpVecAdapter::fetch(ZZ_CRTStructAdapter& crt_struct)
+{
+   rep.reset(crt_struct.rep->extract()); // EXTRACT!!
+}
+
+
+inline void ZZ_TmpVecAdapter::fetch(const ZZ_RemStructAdapter& rem_struct)
+{
+   rep.reset(rem_struct.rep->fetch()); 
+}
+
+
+// montgomery
+class ZZ_ReduceStructAdapter {
+public:
+   UniquePtr<_ntl_reduce_struct> rep;
+
+   void init(const ZZ& p, const ZZ& excess)
+   {
+      rep.reset(_ntl_reduce_struct_build(p.rep, excess.rep));
+   }
+
+   void eval(ZZ& x, ZZ& a) const
+   {
+      rep->eval(&x.rep, &a.rep);
+   }
+
+   void adjust(ZZ& x) const
+   {
+      rep->adjust(&x.rep);
+   }
+};
 
 
 
@@ -498,19 +640,19 @@ inline void DivRem(ZZ& q, ZZ& r, const ZZ& a, const ZZ& b)
 // q = [a/b], r = a - b*q
 // |r| < |b|, and if r != 0, sign(r) = sign(b)
 
-   { NTL_zdiv(a.rep, b.rep, &q.rep, &r.rep); }
+   { _ntl_gdiv(a.rep, b.rep, &q.rep, &r.rep); }
 
 
 
 inline void div(ZZ& q, const ZZ& a, const ZZ& b)
 // q = a/b
 
-   { NTL_zdiv(a.rep, b.rep, &q.rep, 0); }
+   { _ntl_gdiv(a.rep, b.rep, &q.rep, 0); }
 
 inline void rem(ZZ& r, const ZZ& a, const ZZ& b)
 // r = a%b
 
-   { NTL_zmod(a.rep, b.rep, &r.rep); }
+   { _ntl_gmod(a.rep, b.rep, &r.rep); }
 
 
 inline void QuickRem(ZZ& r, const ZZ& b)
@@ -518,7 +660,7 @@ inline void QuickRem(ZZ& r, const ZZ& b)
 // assumes b > 0 and r >=0
 // division is performed in place and may cause r to be re-allocated.
 
-   { NTL_zquickmod(&r.rep, b.rep); }
+   { _ntl_gquickmod(&r.rep, b.rep); }
 
 long divide(ZZ& q, const ZZ& a, const ZZ& b);
 // if b | a, sets q = a/b and returns 1; otherwise returns 0.
@@ -530,16 +672,16 @@ long divide(const ZZ& a, const ZZ& b);
 /* non-standard single-precision versions */
 
 inline long DivRem(ZZ& q, const ZZ& a, long b)
-   { return NTL_zsdiv(a.rep, b, &q.rep); } 
+   { return _ntl_gsdiv(a.rep, b, &q.rep); } 
 
 inline long rem(const ZZ& a, long b)
-   { return NTL_zsmod(a.rep, b); }
+   { return _ntl_gsmod(a.rep, b); }
 
 
 /* single precision versions */
 
 inline void div(ZZ& q, const ZZ& a, long b)
-   { (void) NTL_zsdiv(a.rep, b, &q.rep); }
+   { (void) _ntl_gsdiv(a.rep, b, &q.rep); }
 
 
 long divide(ZZ& q, const ZZ& a, long b);
@@ -571,6 +713,71 @@ inline ZZ& operator%=(ZZ& x, const ZZ& b)
    { rem(x, x, b); return x; } 
 
 
+// preconditioned single-precision variant
+// not documented for now...
+
+
+
+
+struct sp_ZZ_reduce_struct_policy {
+
+   static
+   void deleter(_ntl_general_rem_one_struct *pinfo)
+   {
+      _ntl_general_rem_one_struct_delete(pinfo); 
+   }
+
+};
+
+struct sp_ZZ_reduce_struct {
+   long p;
+   UniquePtr<_ntl_general_rem_one_struct,sp_ZZ_reduce_struct_policy> pinfo;
+
+   sp_ZZ_reduce_struct() : p(0) { }
+
+   void build(long _p)
+   {
+      pinfo.reset(_ntl_general_rem_one_struct_build(_p));
+      p = _p;
+   }
+
+   long rem(const ZZ& a) const
+   {
+      return _ntl_general_rem_one_struct_apply(a.rep, p, pinfo.get());
+   }
+};
+
+
+// special-purpose routines for accumulating CRT-like summations
+// Not documented for now.
+
+
+// Allocates sz+2 limbs and zeros them all out.
+// x is not normalized.
+inline
+void QuickAccumBegin(ZZ& x, long sz)
+{
+   _ntl_quick_accum_begin(&x.rep, sz);
+}
+
+// x += y*b. 
+// Assumes y >= 0 and that 0 <= b < NTL_SP_BOUND.
+// Caller must assure that x does not exceed sz+2 limbs.
+// x remains unnormalized.
+inline
+void QuickAccumMulAdd(ZZ& x, const ZZ& y, long b)
+{
+   _ntl_quick_accum_muladd(x.rep, y.rep, b);
+}
+
+// renormalizes x.
+inline
+void QuickAccumEnd(ZZ& x)
+{
+   _ntl_quick_accum_end(x.rep);
+}
+
+
 /**********************************************************
 
                         GCD's
@@ -581,16 +788,21 @@ inline ZZ& operator%=(ZZ& x, const ZZ& b)
 inline void GCD(ZZ& d, const ZZ& a, const ZZ& b)
 // d = gcd(a, b)
 
-   { NTL_zgcd(a.rep, b.rep, &d.rep); }
+   { _ntl_ggcd(a.rep, b.rep, &d.rep); }
 
 inline ZZ GCD(const ZZ& a, const ZZ& b)
    { ZZ x; GCD(x, a, b); NTL_OPT_RETURN(ZZ, x); }
+
+inline void GCD_alt(ZZ& d, const ZZ& a, const ZZ& b)
+// d = gcd(a, b)
+
+   { _ntl_ggcd_alt(a.rep, b.rep, &d.rep); }
 
 
 inline void XGCD(ZZ& d, ZZ& s, ZZ& t, const ZZ& a, const ZZ& b)
 //  d = gcd(a, b) = a*s + b*t;
 
-   { NTL_zexteucl(a.rep, &s.rep, b.rep, &t.rep, &d.rep); }
+   { _ntl_gexteucl(a.rep, &s.rep, b.rep, &t.rep, &d.rep); }
 
 // single-precision versions
 long GCD(long a, long b);
@@ -613,7 +825,7 @@ void XGCD(long& d, long& s, long& t, long a, long b);
 inline void LeftShift(ZZ& x, const ZZ& a, long k)
 // x = (a << k), k < 0 => RightShift
 
-   { NTL_zlshift(a.rep, k, &x.rep); }
+   { _ntl_glshift(a.rep, k, &x.rep); }
 
 inline ZZ LeftShift(const ZZ& a, long k)
    { ZZ x; LeftShift(x, a, k); NTL_OPT_RETURN(ZZ, x); }
@@ -622,7 +834,7 @@ inline ZZ LeftShift(const ZZ& a, long k)
 inline void RightShift(ZZ& x, const ZZ& a, long k)
 // x = (a >> k), k < 0 => LeftShift
 
-   { NTL_zrshift(a.rep, k, &x.rep); }
+   { _ntl_grshift(a.rep, k, &x.rep); }
 
 inline ZZ RightShift(const ZZ& a, long k)
    { ZZ x; RightShift(x, a, k); NTL_OPT_RETURN(ZZ, x); }
@@ -648,30 +860,30 @@ inline long MakeOdd(ZZ& x)
 // removes factors of 2 from x, returns the number of 2's removed
 // returns 0 if x == 0
 
-   { return NTL_zmakeodd(&x.rep); }
+   { return _ntl_gmakeodd(&x.rep); }
 
 inline long NumTwos(const ZZ& x)
 // returns max e such that 2^e divides x if x != 0, and returns 0 if x == 0.
 
-   { return NTL_znumtwos(x.rep); }
+   { return _ntl_gnumtwos(x.rep); }
 
 
 inline long IsOdd(const ZZ& a)
 // returns 1 if a is odd, otherwise 0
 
-   { return NTL_zodd(a.rep); }
+   { return _ntl_godd(a.rep); }
 
 
 inline long NumBits(const ZZ& a)
 // returns the number of bits in |a|; NumBits(0) = 0
-   { return NTL_z2log(a.rep); }
+   { return _ntl_g2log(a.rep); }
 
 
 
 inline long bit(const ZZ& a, long k)
 // returns bit k of a, 0 being the low-order bit
 
-   { return NTL_zbit(a.rep, k); }
+   { return _ntl_gbit(a.rep, k); }
 
 #ifndef NTL_GMP_LIP
 
@@ -679,7 +891,7 @@ inline long bit(const ZZ& a, long k)
 // compatability.
 
 inline long digit(const ZZ& a, long k)
-   { return NTL_zdigit(a.rep, k); }
+   { return _ntl_gdigit(a.rep, k); }
 
 #endif
 
@@ -688,7 +900,7 @@ inline long digit(const ZZ& a, long k)
 inline void trunc(ZZ& x, const ZZ& a, long k)
 // puts k low order bits of |a| into x
 
-   { NTL_zlowbits(a.rep, k, &x.rep); }
+   { _ntl_glowbits(a.rep, k, &x.rep); }
 
 inline ZZ trunc_ZZ(const ZZ& a, long k)
    { ZZ x; trunc(x, a, k); NTL_OPT_RETURN(ZZ, x); }
@@ -696,14 +908,14 @@ inline ZZ trunc_ZZ(const ZZ& a, long k)
 inline long trunc_long(const ZZ& a, long k)
 // returns k low order bits of |a|
 
-   { return NTL_zslowbits(a.rep, k); }
+   { return _ntl_gslowbits(a.rep, k); }
 
 inline long SetBit(ZZ& x, long p)
 // returns original value of p-th bit of |a|, and replaces
 // p-th bit of a by 1 if it was zero;
 // error if p < 0 
 
-   { return NTL_zsetbit(&x.rep, p); }
+   { return _ntl_gsetbit(&x.rep, p); }
 
 inline long SwitchBit(ZZ& x, long p)
 // returns original value of p-th bit of |a|, and switches
@@ -711,22 +923,22 @@ inline long SwitchBit(ZZ& x, long p)
 // p starts counting at 0;
 //   error if p < 0
 
-   { return NTL_zswitchbit(&x.rep, p); }
+   { return _ntl_gswitchbit(&x.rep, p); }
 
 inline long weight(long a)
 // returns Hamming weight of |a|
 
-   { return NTL_zweights(a); }
+   { return _ntl_gweights(a); }
 
 inline long weight(const ZZ& a)
 // returns Hamming weight of |a|
 
-   { return NTL_zweight(a.rep); }
+   { return _ntl_gweight(a.rep); }
 
 inline void bit_and(ZZ& x, const ZZ& a, const ZZ& b)
 // x = |a| AND |b|
 
-   { NTL_zand(a.rep, b.rep, &x.rep); }
+   { _ntl_gand(a.rep, b.rep, &x.rep); }
 
 void bit_and(ZZ& x, const ZZ& a, long b);
 inline void bit_and(ZZ& x, long a, const ZZ& b)
@@ -736,7 +948,7 @@ inline void bit_and(ZZ& x, long a, const ZZ& b)
 inline void bit_or(ZZ& x, const ZZ& a, const ZZ& b)
 // x = |a| OR |b|
 
-   { NTL_zor(a.rep, b.rep, &x.rep); }
+   { _ntl_gor(a.rep, b.rep, &x.rep); }
 
 void bit_or(ZZ& x, const ZZ& a, long b);
 inline void bit_or(ZZ& x, long a, const ZZ& b)
@@ -745,7 +957,7 @@ inline void bit_or(ZZ& x, long a, const ZZ& b)
 inline void bit_xor(ZZ& x, const ZZ& a, const ZZ& b)
 // x = |a| XOR |b|
 
-   { NTL_zxor(a.rep, b.rep, &x.rep); }
+   { _ntl_gxor(a.rep, b.rep, &x.rep); }
 
 void bit_xor(ZZ& x, const ZZ& a, long b);
 inline void bit_xor(ZZ& x, long a, const ZZ& b)
@@ -799,7 +1011,9 @@ inline ZZ& operator^=(ZZ& x, long b)
 
 
 
-long NumBits(long a);
+inline
+long NumBits(long a)
+   { return _ntl_g2logs(a); }
 
 long bit(long a, long k);
 
@@ -824,19 +1038,19 @@ long NumBytes(long a)
 
 
 inline long ZZ_BlockConstructAlloc(ZZ& x, long d, long n)
-   { return NTL_zblock_construct_alloc(&x.rep, d, n); }
+   { return _ntl_gblock_construct_alloc(&x.rep, d, n); }
 
 inline void ZZ_BlockConstructSet(ZZ& x, ZZ& y, long i)
-   { NTL_zblock_construct_set(x.rep, &y.rep, i); }
+   { _ntl_gblock_construct_set(x.rep, &y.rep, i); }
 
 inline long ZZ_BlockDestroy(ZZ& x)
-   { return NTL_zblock_destroy(x.rep);  }
+   { return _ntl_gblock_destroy(x.rep);  }
 
 inline long ZZ_storage(long d)
-   { return NTL_zblock_storage(d); }
+   { return _ntl_gblock_storage(d); }
 
 inline long ZZ_RoundCorrection(const ZZ& a, long k, long residual)
-   { return NTL_zround_correction(a.rep, k, residual); }
+   { return _ntl_ground_correction(a.rep, k, residual); }
 
 
 /***********************************************************
@@ -846,8 +1060,195 @@ inline long ZZ_RoundCorrection(const ZZ& a, long k, long residual)
 ************************************************************/
 
 
+// ================ NEW PRG STUFF =================
+
+
+// Low-level key-derivation 
+
+
+void DeriveKey(unsigned char *key, long klen,  
+               const unsigned char *data, long dlen);
+
+
+
+// Low-level chacha stuff
+
+#define NTL_PRG_KEYLEN (32)
+
+
+struct RandomStream_impl;
+
+RandomStream_impl *
+RandomStream_impl_build(const unsigned char *key);
+
+RandomStream_impl *
+RandomStream_impl_build(const RandomStream_impl&);
+
+void
+RandomStream_impl_copy(RandomStream_impl&, const RandomStream_impl&);
+
+const unsigned char *
+RandomStream_impl_get_buf(const RandomStream_impl&);
+
+long
+RandomStream_impl_get_buf_len(const RandomStream_impl&);
+
+long
+RandomStream_impl_get_bytes(RandomStream_impl& impl, unsigned char *res, 
+   long n, long pos);
+
+void RandomStream_impl_set_nonce(RandomStream_impl& impl, unsigned long nonce);
+
+void
+RandomStream_impl_delete(RandomStream_impl*);
+
+struct 
+RandomStream_impl_deleter {
+   static void deleter(RandomStream_impl* p) { RandomStream_impl_delete(p); }
+};
+
+
+class RandomStream {
+private:
+
+   long pos;
+   const unsigned char *buf;
+   long buf_len;
+
+   UniquePtr<RandomStream_impl,RandomStream_impl_deleter> impl;
+
+public:
+
+   explicit
+   RandomStream(const unsigned char *key) {
+      impl.reset(RandomStream_impl_build(key));
+      pos = buf_len = RandomStream_impl_get_buf_len(*impl);
+      buf = RandomStream_impl_get_buf(*impl);
+   }
+
+   RandomStream(const RandomStream& other) {
+      impl.reset(RandomStream_impl_build(*other.impl));
+      pos = other.pos;
+      buf_len = other.buf_len;
+      buf = RandomStream_impl_get_buf(*impl);
+   }
+
+   RandomStream& operator=(const RandomStream& other) {
+      RandomStream_impl_copy(*impl, *other.impl);
+      pos = other.pos;
+      buf_len = other.buf_len;
+      buf = RandomStream_impl_get_buf(*impl);
+      return *this;
+   }
+
+   void get(unsigned char *res, long n) 
+   {
+      // optimize short reads
+      if (n > 0 && n <= buf_len-pos) {
+#if 1
+         std::memcpy(&res[0], &buf[pos], n);
+         // NOTE: mempy undefined if res == null
+         // That's a reason we don't do this for n==0, which
+         // is anyway an unlikely case
+#else
+         for (long i = 0; i < n; i++) {
+            res[i] = buf[pos+i];
+         }
+#endif
+         pos += n;
+      }
+      else {
+         pos = RandomStream_impl_get_bytes(*impl, res, n, pos);
+      }
+   }
+
+   // FIXME: document this? Not sure if I want to 
+   // commit to this interface, as it is somewhat ChaCha-specific
+   void set_nonce(unsigned long nonce) 
+   {
+      RandomStream_impl_set_nonce(*impl, nonce);
+      pos = buf_len;
+   }
+
+};
+
+// this is the number of bits we can pass through the set_nonce
+// interface
+#if (NTL_BITS_PER_LONG > 64)
+#define NTL_BITS_PER_NONCE (64)
+#else
+#define NTL_BITS_PER_NONCE NTL_BITS_PER_LONG
+#endif
+
+
+
+// ============ old stuff: for testing  ============
+
+class old_RandomStream {
+private:
+   _ntl_uint32 state[16];
+   unsigned char buf[64];
+   long pos;
+
+   void do_get(unsigned char *res, long n); 
+
+public:
+   explicit
+   old_RandomStream(const unsigned char *key);
+
+   // No default constructor 
+   // default copy and assignment
+
+   void get(unsigned char *res, long n) 
+   {
+      // optimize short reads
+      if (n >= 0 && n <= 64-pos) {
+         long i;
+         for (i = 0; i < n; i++) {
+            res[i] = buf[pos+i];
+         }
+         pos += n;
+      }
+      else {
+         do_get(res, n);
+      }
+   }
+
+};
+
+   
+
+
+RandomStream& GetCurrentRandomStream();
+// get reference to the current random by stream --
+// if SetSeed has not been called, it is called with
+// a default value (which should be unique to each
+// process/thread
+
+
 void SetSeed(const ZZ& s);
+void SetSeed(const unsigned char *data, long dlen);
+void SetSeed(const RandomStream& s);
 // initialize random number generator
+// in the first two version, a PRG key is derived from
+// the data using DeriveKey.
+
+
+// RAII for saving/restoring current state of PRG
+
+class RandomStreamPush {
+private: 
+   RandomStream saved;
+
+   RandomStreamPush(const RandomStreamPush&); // disable
+   void operator=(const RandomStreamPush&); // disable
+
+public:
+   RandomStreamPush() : saved(GetCurrentRandomStream()) { }
+   ~RandomStreamPush() { SetSeed(saved); } 
+
+};
+
 
 
 void RandomBnd(ZZ& x, const ZZ& n);
@@ -875,15 +1276,82 @@ inline ZZ RandomBits_ZZ(long NumBits)
 // single-precision version of the above
 
 long RandomBnd(long n);
+inline void RandomBnd(long& x, long n) { x = RandomBnd(n); }
 
 long RandomLen_long(long l);
+inline void RandomLen(long& x, long l) { x = RandomLen_long(l); }
 
 long RandomBits_long(long l);
+inline void RandomBits(long& x, long l) { x = RandomBits_long(l); }
+
+
+// specialty routines
 
 unsigned long RandomWord();
 unsigned long RandomBits_ulong(long l);
 
+// helper class to make generating small random numbers faster
+// FIXME: add documentation?
+struct RandomBndGenerator {
 
+   long p;
+   long nb;
+   unsigned long mask;
+
+   RandomStream *str;
+
+   RandomBndGenerator() : p(0) { }
+
+   explicit
+   RandomBndGenerator(long _p) : p(0) { build(_p); }
+
+   void build(long _p)
+   {
+      if (_p <= 1) LogicError("RandomBndGenerator::init: bad args");
+
+      if (!p) {
+         str = &GetCurrentRandomStream();
+      }
+
+      p = _p;
+      long l = NumBits(p-1);
+      nb = (l+7)/8;
+      mask = (1UL << l)-1UL;
+   }
+
+   long next()
+   {
+      unsigned char buf[NTL_BITS_PER_LONG/8];
+      long tmp;
+
+      do {
+         str->get(buf, nb);
+
+         unsigned long word = 0;
+         for (long i = nb-1; i >= 0; i--) word = (word << 8) | buf[i];
+
+         tmp = long(word & mask);
+      } while (tmp >= p);
+
+      return tmp;
+   }
+};
+
+
+inline void VectorRandomBnd(long k, long* x, long n)
+{
+   if (k <= 0) return;
+   if (n <= 1) {
+      for (long i = 0; i < k; i++) x[i] = 0;
+   }
+   else {
+      RandomBndGenerator gen(n);
+      for (long i = 0; i < k; i++) x[i] = gen.next();
+   }
+}
+
+
+void VectorRandomWord(long k, unsigned long* x);
 
 
 /**********************************************************
@@ -901,7 +1369,7 @@ long CRT(ZZ& a, ZZ& p, long A, long P);
 //   has changed, otherwise 0
 
 inline long CRTInRange(const ZZ& gg, const ZZ& aa)
-   { return NTL_zcrtinrange(gg.rep, aa.rep); }
+   { return _ntl_gcrtinrange(gg.rep, aa.rep); }
 
 // an auxilliary routine used by newer CRT routines to maintain
 // backward compatability.
@@ -922,7 +1390,7 @@ inline
 long ReconstructRational(ZZ& a, ZZ& b, const ZZ& u, const ZZ& m, 
                          const ZZ& a_bound, const ZZ& b_bound)
 {
-   return NTL_zxxratrecon(u.rep, m.rep, a_bound.rep, b_bound.rep, &a.rep, &b.rep);
+   return _ntl_gxxratrecon(u.rep, m.rep, a_bound.rep, b_bound.rep, &a.rep, &b.rep);
 
 }
 
@@ -990,13 +1458,13 @@ long NextPrime(long l, long NumTrials=10);
 *************************************************************/
 
 inline void power(ZZ& x, const ZZ& a, long e)
-   { NTL_zexp(a.rep, e, &x.rep); }
+   { _ntl_gexp(a.rep, e, &x.rep); }
 
 inline ZZ power(const ZZ& a, long e)
    { ZZ x; power(x, a, e); NTL_OPT_RETURN(ZZ, x); }
 
 inline void power(ZZ& x, long a, long e)
-   {  NTL_zexps(a, e, &x.rep); }
+   {  _ntl_gexps(a, e, &x.rep); }
 
 inline ZZ power_ZZ(long a, long e)
    { ZZ x; power(x, a, e); NTL_OPT_RETURN(ZZ, x); }
@@ -1025,14 +1493,14 @@ inline void SqrRoot(ZZ& x, const ZZ& a)
 // x = [a^{1/2}], a >= 0
 
 {
-   NTL_zsqrt(a.rep, &x.rep);
+   _ntl_gsqrt(a.rep, &x.rep);
 }
 
 inline ZZ SqrRoot(const ZZ& a)
    { ZZ x; SqrRoot(x, a); NTL_OPT_RETURN(ZZ, x); }
 
 
-inline long SqrRoot(long a) { return NTL_zsqrts(a); }
+inline long SqrRoot(long a) { return _ntl_gsqrts(a); }
 // single-precision version
 
 
@@ -1050,7 +1518,7 @@ inline long SqrRoot(long a) { return NTL_zsqrts(a); }
 
 inline void AddMod(ZZ& x, const ZZ& a, const ZZ& b, const ZZ& n)
 // x = (a+b)%n
-   { NTL_zaddmod(a.rep, b.rep, n.rep, &x.rep); }
+   { _ntl_gaddmod(a.rep, b.rep, n.rep, &x.rep); }
    
 
 inline ZZ AddMod(const ZZ& a, const ZZ& b, const ZZ& n)
@@ -1059,7 +1527,7 @@ inline ZZ AddMod(const ZZ& a, const ZZ& b, const ZZ& n)
 inline void SubMod(ZZ& x, const ZZ& a, const ZZ& b, const ZZ& n)
 // x = (a-b)%n
 
-   { NTL_zsubmod(a.rep, b.rep, n.rep, &x.rep); }
+   { _ntl_gsubmod(a.rep, b.rep, n.rep, &x.rep); }
 
 inline ZZ SubMod(const ZZ& a, const ZZ& b, const ZZ& n)
    { ZZ x; SubMod(x, a, b, n); NTL_OPT_RETURN(ZZ, x); }
@@ -1067,7 +1535,7 @@ inline ZZ SubMod(const ZZ& a, const ZZ& b, const ZZ& n)
 inline void NegateMod(ZZ& x, const ZZ& a, const ZZ& n)
 // x = -a % n
 
-   { NTL_zsubmod(0, a.rep, n.rep, &x.rep); }
+   { _ntl_gsubmod(0, a.rep, n.rep, &x.rep); }
 
 inline ZZ NegateMod(const ZZ& a, const ZZ& n)
    { ZZ x; NegateMod(x, a, n); NTL_OPT_RETURN(ZZ, x); }
@@ -1092,7 +1560,7 @@ inline ZZ SubMod(long a, const ZZ& b, const ZZ& n)
 inline void MulMod(ZZ& x, const ZZ& a, const ZZ& b, const ZZ& n)
 // x = (a*b)%n
 
-   { NTL_zmulmod(a.rep, b.rep, n.rep, &x.rep); }
+   { _ntl_gmulmod(a.rep, b.rep, n.rep, &x.rep); }
 
 inline ZZ MulMod(const ZZ& a, const ZZ& b, const ZZ& n)
    { ZZ x; MulMod(x, a, b, n); NTL_OPT_RETURN(ZZ, x); }
@@ -1100,7 +1568,7 @@ inline ZZ MulMod(const ZZ& a, const ZZ& b, const ZZ& n)
 inline void MulMod(ZZ& x, const ZZ& a, long b, const ZZ& n)
 // x = (a*b)%n
 
-   { NTL_zsmulmod(a.rep, b, n.rep, &x.rep); }
+   { _ntl_gsmulmod(a.rep, b, n.rep, &x.rep); }
 
 inline ZZ MulMod(const ZZ& a, long b, const ZZ& n)
    { ZZ x; MulMod(x, a, b, n); NTL_OPT_RETURN(ZZ, x); }
@@ -1115,30 +1583,30 @@ inline ZZ MulMod(long a, const ZZ& b, const ZZ& n)
 inline void SqrMod(ZZ& x, const ZZ& a, const ZZ& n)
 // x = a^2 % n
 
-   { NTL_zsqmod(a.rep, n.rep, &x.rep); }
+   { _ntl_gsqmod(a.rep, n.rep, &x.rep); }
 
 inline ZZ SqrMod(const ZZ& a, const ZZ& n)
    {  ZZ x; SqrMod(x, a, n); NTL_OPT_RETURN(ZZ, x); }
 
-inline void InvMod(ZZ& x, const ZZ& a, const ZZ& n)
-// x = a^{-1} mod n, 0 <= x < n
-// error is raised occurs if inverse not defined
-
-   { NTL_zinvmod(a.rep, n.rep, &x.rep); }
+void InvMod(ZZ& x, const ZZ& a, const ZZ& n);
+// defined in ZZ.c in terms of InvModStatus
 
 inline ZZ InvMod(const ZZ& a, const ZZ& n)
    {  ZZ x; InvMod(x, a, n); NTL_OPT_RETURN(ZZ, x); }
 
 
 inline long InvModStatus(ZZ& x, const ZZ& a, const ZZ& n)
-// if gcd(a,b) = 1, then ReturnValue = 0, x = a^{-1} mod n
+// if gcd(a,n) = 1, then ReturnValue = 0, x = a^{-1} mod n
 // otherwise, ReturnValue = 1, x = gcd(a, n)
 
-  { return NTL_zinv(a.rep, n.rep, &x.rep); }
+  { return _ntl_ginv(a.rep, n.rep, &x.rep); }
 
 
-inline void PowerMod(ZZ& x, const ZZ& a, const ZZ& e, const ZZ& n)
-   { NTL_zpowermod(a.rep, e.rep, n.rep, &x.rep); }
+void PowerMod(ZZ& x, const ZZ& a, const ZZ& e, const ZZ& n);
+// defined in ZZ.c in terms of LowLevelPowerMod
+
+inline void LowLevelPowerMod(ZZ& x, const ZZ& a, const ZZ& e, const ZZ& n)
+   { _ntl_gpowermod(a.rep, e.rep, n.rep, &x.rep); }
 
 inline ZZ PowerMod(const ZZ& a, const ZZ& e, const ZZ& n)
    { ZZ x; PowerMod(x, a, e, n); NTL_OPT_RETURN(ZZ, x); }
@@ -1196,9 +1664,8 @@ inline ZZ SqrRootMod(const ZZ& a, const ZZ& n)
 
 class PrimeSeq {
 
-
-char *movesieve;
-char *movesieve_mem;
+const char *movesieve;
+Vec<char> movesieve_mem;
 long pindex;
 long pshift;
 long exhausted;
@@ -1206,7 +1673,6 @@ long exhausted;
 public:
 
 PrimeSeq();
-~PrimeSeq();
 
 long next();
 // returns next prime in the sequence.
@@ -1243,805 +1709,88 @@ NTL_SNS ostream& operator<<(NTL_SNS ostream& s, const ZZ& a);
 
 
 
-/****************************************************************
-
-    Single-precision modular arithmetic
-
-*****************************************************************/
-
-
-/*
-these routines implement single-precision modular arithmetic.
-If n is the modulus, all inputs should be in the range 0..n-1.
-The number n itself should be in the range 1..2^{NTL_SP_NBITS}-1.
-*/
-
-// I've declared these "static" so that the installation wizard
-// has more flexibility, without worrying about the (rather esoteric)
-// possibility of the linker complaining when the definitions
-// are inconsistent across severeal files.
-// Maybe an unnamed namespace would be better.
-
-
-
-
-
-
-
-
-
-static inline long AddMod(long a, long b, long n)
-// return (a+b)%n
-
-{
-   long res = a + b;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING) && !defined(NTL_CLEAN_INT))
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   return res;
-#elif (defined(NTL_AVOID_BRANCHING))
-   res -= n;
-   res += (long) ((-(((unsigned long) res) >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n));
-   return res;
-#else
-   if (res >= n)
-      return res - n;
-   else
-      return res;
-#endif
-}
-
-static inline long SubMod(long a, long b, long n)
-// return (a-b)%n
-
-{
-   long res = a - b;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING) && !defined(NTL_CLEAN_INT))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   return res;
-#elif (defined(NTL_AVOID_BRANCHING))
-   res += (long) ((-(((unsigned long) res) >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n));
-   return res;
-#else
-   if (res < 0)
-      return res + n;
-   else
-      return res;
-#endif
-}
-
-static inline long NegateMod(long a, long n)
-{
-   return SubMod(0, a, n);
-}
-
-
-
-#if (defined(NTL_CLEAN_INT) || (defined(NTL_AVOID_BRANCHING)  && !NTL_ARITH_RIGHT_SHIFT))
-#define NTL_CLEAN_SPMM
-#endif
-
-
-#if (defined(NTL_SINGLE_MUL))
-
-
-#if (!defined(NTL_FAST_INT_MUL))
-
-
-static inline long MulMod(long a, long b, long n)
-// return (a*b)%n
-
-{
-   double ab;
-   long q, res;
-
-   ab = ((double) a) * ((double) b);
-   q  = (long) (ab/((double) n));  // q could be off by (+/-) 1
-   res = (long) (ab - ((double) q)*((double) n));
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-/*
-The following MulMod takes a fourth argument, ninv,
-which is assumed to equal 1/((double) n).
-It is usually faster than the above.
-*/
-
-static inline long MulMod(long a, long b, long n, double ninv)
-{
-   double ab;
-   long q, res;
-
-   ab = ((double) a) * ((double) b);
-   q  = (long) (ab*ninv);   // q could be off by (+/-) 1
-   res = (long) (ab - ((double) q)*((double) n));
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-/*
-Yet another MulMod.
-This time, the 4th argument should be ((double) b)/((double) n).
-*/
-
-static inline long MulMod2(long a, long b, long n, double bninv)
-{
-   double ab;
-   long q, res;
-
-   ab = ((double) a)*((double) b);
-   q = (long) (((double) a)*bninv);
-   res = (long) (ab - ((double) q)*((double) n));
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-static inline long MulDivRem(long& qq, long a, long b, long n, double bninv)
-{
-   double ab;
-   long q, res;
-
-   ab = ((double) a)*((double) b);
-   q = (long) (((double) a)*bninv);
-   res = (long) (ab - ((double) q)*((double) n));
-   if (res >= n) {
-      res -= n;
-      q++;
-   } else if (res < 0) {
-      res += n;
-      q--;
-   }
-
-   qq = q;
-   return res;
-}
-
-#else
-
-static inline long MulMod(long a, long b, long n)
-// return (a*b)%n
-
-{
-   double ab, xx;
-   long iab, q, res;
-
-   ab = ((double) a) * ((double) b);
-   q  = (long) (ab/((double) n));  // q could be off by (+/-) 1
-
-   xx = ab + 4503599627370496.0;
-   NTL_FetchLo(iab, xx);
-
-   res = iab - q*n;
-
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-/*
-The following MulMod takes a fourth argument, ninv,
-which is assumed to equal 1/((double) n).
-It is usually faster than the above.
-*/
-
-static inline long MulMod(long a, long b, long n, double ninv)
-{
-   double ab, xx;
-   long iab, q, res;
-
-   ab = ((double) a) * ((double) b);
-   q  = (long) (ab*ninv);   // q could be off by (+/-) 1
-
-   xx = ab + 4503599627370496.0;
-   NTL_FetchLo(iab, xx);
-
-   res = iab - q*n;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-/*
-Yet another MulMod.
-This time, the 4th argument should be ((double) b)/((double) n).
-*/
-
-static inline long MulMod2(long a, long b, long n, double bninv)
-{
-   long q, res;
-
-   q = (long) (((double) a)*bninv);
-   res = a*b - q*n;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-
-static inline long MulDivRem(long& qq, long a, long b, long n, double bninv)
-{
-   long q, res;
-
-   q = (long) (((double) a)*bninv);
-   res = a*b - q*n;
-   if (res >= n) {
-      res -= n;
-      q++;
-   } else if (res < 0) {
-      res += n;
-      q--;
-   }
-
-   qq = q;
-   return res;
-}
-
-#endif
-
-
-#elif (!defined(NTL_CLEAN_SPMM))
-
-
-/*
- * The default MulMod code.
- */
-
-static inline long MulMod(long a, long b, long n)
-{
-   long q, res;
-
-   q  = (long) ((((double) a) * ((double) b)) / ((double) n)); 
-   res = a*b - q*n;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-static inline long MulMod(long a, long b, long n, double ninv)
-{
-   long q, res;
-
-   q  = (long) ((((double) a) * ((double) b)) * ninv); 
-   res = a*b - q*n;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-
-static inline long MulMod2(long a, long b, long n, double bninv)
-{
-   long q, res;
-
-   q  = (long) (((double) a) * bninv);
-   res = a*b - q*n;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-   else if (res < 0)
-      res += n;
-#endif
-   return res;
-}
-
-static inline long MulDivRem(long& qq, long a, long b, long n, double bninv)
-{
-   long q, res;
-
-   q  = (long) (((double) a) * bninv);
-   res = a*b - q*n;
-   if (res >= n) {
-      res -= n;
-      q++;
-   } else if (res < 0) {
-      res += n;
-      q--;
-   }
-
-   qq = q;
-   return res;
-}
-
-#else
-
-/*
- * NTL_CLEAN_INT set: these versions of MulMod are completely portable,
- * assuming IEEE floating point arithmetic.
- */
-
-static inline long MulMod(long a, long b, long n)
-{  
-   long q;
-   unsigned long res;
-
-   q  = (long) ((((double) a) * ((double) b)) / ((double) n)); 
-
-   res = ((unsigned long) a)*((unsigned long) b) - 
-         ((unsigned long) q)*((unsigned long) n);
-
-#if (defined(NTL_AVOID_BRANCHING))
-   res += (-(res >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n);
-   res -= ((unsigned long) n);
-   res += (-(res >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n);
-#else
-   if (res >> (NTL_BITS_PER_LONG-1))
-      res += ((unsigned long) n);
-   else if (((long) res) >= n)
-      res -= ((unsigned long) n);
-#endif
- 
-   return ((long) res);
-}
-
-static inline long MulMod(long a, long b, long n, double ninv)
-{
-   long q; 
-   unsigned long res;
-
-   q  = (long) ((((double) a) * ((double) b)) * ninv); 
-
-   res = ((unsigned long) a)*((unsigned long) b) - 
-         ((unsigned long) q)*((unsigned long) n);
-
-#if (defined(NTL_AVOID_BRANCHING))
-   res += (-(res >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n);
-   res -= ((unsigned long) n);
-   res += (-(res >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n);
-#else
-   if (res >> (NTL_BITS_PER_LONG-1))
-      res += ((unsigned long) n);
-   else if (((long) res) >= n)
-      res -= ((unsigned long) n);
-#endif
- 
-   return ((long) res);
-}
-
-
-static inline long MulMod2(long a, long b, long n, double bninv)
-{
-   long q;
-   unsigned long res;
-
-   q  = (long) (((double) a) * bninv);
-
-   res = ((unsigned long) a)*((unsigned long) b) - 
-         ((unsigned long) q)*((unsigned long) n);
-
-#if (defined(NTL_AVOID_BRANCHING))
-   res += (-(res >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n);
-   res -= ((unsigned long) n);
-   res += (-(res >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n);
-#else
-   if (res >> (NTL_BITS_PER_LONG-1))
-      res += ((unsigned long) n);
-   else if (((long) res) >= n)
-      res -= ((unsigned long) n);
-#endif
-
- 
-   return ((long) res);
-}
-
-static inline long MulDivRem(long& qq, long a, long b, long n, double bninv)
-{
-   long q; 
-   unsigned long res;
-
-   q  = (long) (((double) a) * bninv);
-   res = ((unsigned long) a)*((unsigned long) b) - 
-         ((unsigned long) q)*((unsigned long) n);
-
-   if (res >> (NTL_BITS_PER_LONG-1)) {
-      res += n;
-      q--;
-   } else if (((long) res) >= n) {
-      res -= n;
-      q++;
-   }
-
-   qq = q;
-   return ((long) res);
-}
-
-
-#endif
-
-
-
-
-// These MulMod routines (with preconditioning) are sometimes
-// significantly faster.  There are four possible implementations:
-//  - default: uses MulMod2 above (lots of floating point)
-//  - NTL_SPMM_ULL: uses unsigned long long (if possible)
-//  - NTL_SPMM_ASM: uses assembly language (if possible)
-//  - NTL_SPMM_UL: uses only unsigned long arithmetic (portable, slower).
-
-#if (!defined(NTL_SINGLE_MUL) && (defined(NTL_SPMM_ULL) || defined(NTL_SPMM_ASM)))
-
-
-// unsigned long long / asm versions
-
-typedef unsigned long mulmod_precon_t;
-
-#define NTL_SPMM_VEC_T vec_ulong
-
-#if (!defined(NTL_CLEAN_SPMM))
-
-static inline unsigned long PrepMulModPrecon(long b, long n, double ninv)
-{
-   long q, r;
-
-   q  = (long) ( (((double) b) * NTL_SP_FBOUND) * ninv ); 
-   r = (b << NTL_SP_NBITS) - q*n;
-
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   q += 1 + (r >> (NTL_BITS_PER_LONG-1)) + ((r - n) >> (NTL_BITS_PER_LONG-1));
-#else
-   if (r >= n)
-      q++;
-   else if (r < 0)
-      q--;
-#endif
-
-   return ((unsigned long) q) << (NTL_BITS_PER_LONG - NTL_SP_NBITS);
-}
-
-
-#else
-
-/*
- * clean int version -- this should be completely portable.
- */
-
-
-static inline unsigned long PrepMulModPrecon(long b, long n, double ninv)
-{
-   unsigned long q, r;
-
-   q = (long) ( (((double) b) * NTL_SP_FBOUND) * ninv ); 
-   r = (((unsigned long) b) << NTL_SP_NBITS ) - q * ((unsigned long) n);
-
-#if (defined(NTL_AVOID_BRANCHING))
-   q += 1UL - (r >> (NTL_BITS_PER_LONG-1)) - ((r - ((unsigned long) n)) >> (NTL_BITS_PER_LONG-1));
-#else
-   if (r >> (NTL_BITS_PER_LONG-1))
-      q--;
-   else if (((long) r) >= n)
-      q++;
-#endif
-
-   return q << (NTL_BITS_PER_LONG - NTL_SP_NBITS);
-}
-
-
-
-#endif
-
-
-
-
-#if (defined(NTL_SPMM_ULL))
-
-static inline unsigned long MulHiUL(unsigned long a, unsigned long b)
-{
-   return (((NTL_ULL_TYPE)(a)) * ((NTL_ULL_TYPE)(b))) >> NTL_BITS_PER_LONG;
-} 
-
-#else 
-
-// assmbly code versions
-
-#include <NTL/SPMM_ASM.h>
-
-
-#endif
-
-
-
-
-
-   
-
-#if (!defined(NTL_CLEAN_SPMM))
-
-
-
-static inline long MulModPrecon(long a, long b, long n, unsigned long bninv)
-{
-   long q, res;
-   
-   q = (long) MulHiUL(a, bninv);
-
-   res = a*b - q*n;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-#endif
-   return res;
-}
-
-
-#else
-
-static inline long MulModPrecon(long a, long b, long n, unsigned long bninv)
-{
-   unsigned long q, res;
-
-   
-   q = MulHiUL(a, bninv);
-
-   res = ((unsigned long) a)*((unsigned long) b) - q*((unsigned long) n);
-
-#if (defined(NTL_AVOID_BRANCHING))
-   res -= ((unsigned long) n);
-   res += (-(res >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n);
-#else
-   if (((long) res) >= n)
-      res -= ((unsigned long) n);
-#endif
-
-   return (long) res;
-}
-
-#endif
-
-
-
-#elif (!defined(NTL_SINGLE_MUL) && defined(NTL_SPMM_UL))
-
-// plain, portable (but slower) int version
-
-typedef long mulmod_precon_t;
-
-#define NTL_SPMM_VEC_T vec_long
-
-
-#if (!defined(NTL_CLEAN_SPMM))
-
-static inline long PrepMulModPrecon(long b, long n, double ninv)
-{
-   long q, r;
-
-   q  = (long) ( (((double) b) * NTL_SP_FBOUND) * ninv ); 
-   r = (b << NTL_SP_NBITS) - q*n;
-
-
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   q += 1 + (r >> (NTL_BITS_PER_LONG-1)) + ((r - n) >> (NTL_BITS_PER_LONG-1));
-#else
-   if (r >= n)
-      q++;
-   else if (r < 0)
-      q--;
-#endif
-
-   return q;
-}
-
-
-#else
-
-static inline long PrepMulModPrecon(long b, long n, double ninv)
-{
-   unsigned long q, r;
-
-   q = (long) ( (((double) b) * NTL_SP_FBOUND) * ninv ); 
-   r = (((unsigned long) b) << NTL_SP_NBITS ) - q * ((unsigned long) n);
-
-#if (defined(NTL_AVOID_BRANCHING))
-   q += 1UL - (r >> (NTL_BITS_PER_LONG-1)) - ((r - ((unsigned long) n)) >> (NTL_BITS_PER_LONG-1));
-#else
-   if (r >> (NTL_BITS_PER_LONG-1))
-      q--;
-   else if (((long) r) >= n)
-      q++;
-#endif
-
-   return ((long) q);
-}
-
-
-#endif
-
-
-
-
-static inline long MulHiSP(long b, long d)
-{
-   unsigned long _b1 = b & ((1UL << (NTL_SP_NBITS/2)) - 1UL);
-   unsigned long _d1 = d & ((1UL << (NTL_SP_NBITS/2)) - 1UL);
-   unsigned long _bd,_b1d1,_m,_aa;
-   unsigned long _ld = (d>>(NTL_SP_NBITS/2));
-   unsigned long _lb = (b>>(NTL_SP_NBITS/2));
-
-   _bd=_lb*_ld;
-   _b1d1=_b1*_d1;
-   _m=(_lb+_b1)*(_ld+_d1) - _bd - _b1d1;
-   _aa = ( _b1d1+ ((_m&((1UL << (NTL_SP_NBITS/2)) - 1UL))<<(NTL_SP_NBITS/2)));
-   return (_aa >> NTL_SP_NBITS) + _bd + (_m>>(NTL_SP_NBITS/2));
-}
-
-
-#if (!defined(NTL_CLEAN_SPMM))
-
-static inline long MulModPrecon(long a, long b, long n, long bninv)
-{
-
-   long q, res;
-
-   q = MulHiSP(a, bninv);
-
-   res = a*b - q*n;
-#if (NTL_ARITH_RIGHT_SHIFT && defined(NTL_AVOID_BRANCHING))
-   res -= n;
-   res += (res >> (NTL_BITS_PER_LONG-1)) & n;
-#else
-   if (res >= n)
-      res -= n;
-#endif
-   return res;
-}
-
-
-
-#else
-
-
-static inline long MulModPrecon(long a, long b, long n, long bninv)
-{
-
-   unsigned long q, res;
-
-   q = MulHiSP(a, bninv);
-
-   res = ((unsigned long) a)*((unsigned long) b) - q*((unsigned long) n);
-
-#if (defined(NTL_AVOID_BRANCHING))
-   res -= ((unsigned long) n);
-   res += (-(res >> (NTL_BITS_PER_LONG-1))) & ((unsigned long) n);
-#else
-   if (((long) res) >= n)
-      res -= ((unsigned long) n);
-#endif
-
-   return (long) res;
-}
-
-
-#endif
-
-
-
-
-#else
-
-// default, double version
-
-typedef double mulmod_precon_t;
-
-#define NTL_SPMM_VEC_T vec_double
-
-static inline double PrepMulModPrecon(long b, long, double ninv)
-{
-   return ((double) b) * ninv;
-}
-
-static inline long MulModPrecon(long a, long b, long n, double bninv)
-{
-   return MulMod2(a, b, n, bninv);
-}
-
-
-#endif
+// Some additional SP arithmetic routines, not defined in sp_arith.h
 
 
 long InvMod(long a, long n);
 // computes a^{-1} mod n.  Error is raised if undefined.
 
+long InvModStatus(long& x, long a, long n);
+// if gcd(a,n) = 1, then ReturnValue = 0, x = a^{-1} mod n
+// otherwise, ReturnValue = 1, x = gcd(a, n)
+
 long PowerMod(long a, long e, long n);
 // computes a^e mod n, e >= 0
 
 
-inline
-void VectorMulModPrecon(long k, long *x, const long *a, long b, long n, 
-                        mulmod_precon_t bninv)
+// Error handling
+
+#ifdef NTL_EXCEPTIONS
+
+class InvModErrorObject : public ArithmeticErrorObject {
+private:
+   SmartPtr<ZZ> a_ptr;
+   SmartPtr<ZZ> n_ptr;
+public:
+   InvModErrorObject(const char *s, const ZZ& a, const ZZ& n)
+      : ArithmeticErrorObject(s) , a_ptr(MakeSmart<ZZ>(a)),
+        n_ptr(MakeSmart<ZZ>(n)) { }
+
+   const ZZ& get_a() const { return *a_ptr; }
+   const ZZ& get_n() const { return *n_ptr; }
+};
+
+#else
+
+// We need this alt definition to keep pre-C++11 
+// compilers happy (NTL_EXCEPTIONS should only be used
+// with C++11 compilers).
+
+class InvModErrorObject : public ArithmeticErrorObject {
+public:
+   InvModErrorObject(const char *s, const ZZ& a, const ZZ& n)
+      : ArithmeticErrorObject(s) { }
+
+   const ZZ& get_a() const { return ZZ::zero(); }
+   const ZZ& get_n() const { return ZZ::zero(); }
+};
+
+#endif
+
+
+void InvModError(const char *s, const ZZ& a, const ZZ& n); 
+
+#ifdef NTL_PROVIDES_SS_LIP_IMPL
+
+inline void 
+LeftRotate_lip_impl(ZZ& a, const ZZ& b, long e, const ZZ& p, long n, ZZ& scratch)
+// Compute a = b * 2^e mod p, where p = 2^n+1. 0<=e<n and 0<b<p 
+// a may not alias p
+// scratch may not alias a, b, or p
 {
-   for (long i = 0; i < k; i++)
-      x[i] = MulModPrecon(a[i], b, n, bninv);
+   _ntl_leftrotate(&a.rep, &b.rep, e, p.rep, n, &scratch.rep);
 }
 
-inline
-void VectorMulMod(long k, long *x, const long *a, long b, long n, 
-                  double ninv)
+inline void
+SS_AddMod_lip_impl(ZZ& x, const ZZ& a, const ZZ& b, const ZZ& p, long n)
+// x = a + b mod p, where p = 2^n+1,  a, b in [0, p).
+// x may not alias p.
 {
-   mulmod_precon_t bninv;
-   bninv = PrepMulModPrecon(b, n, ninv);
-   VectorMulModPrecon(k, x, a, b, n, bninv);
+   _ntl_ss_addmod(&x.rep, &a.rep, &b.rep, p.rep, n);
 }
 
-
-inline 
-void VectorMulMod(long k, long *x, const long *a, long b, long n)
+inline void
+SS_SubMod_lip_impl(ZZ& x, const ZZ& a, const ZZ& b, const ZZ& p, long n)
+// x = a + b mod p, where p = 2^n+1,  a, b in [0, p).
+// x may not alias b or p.
 {
-   double ninv = 1/((double) n);
-   VectorMulMod(k, x, a, b, n, ninv);
+   _ntl_ss_submod(&x.rep, &a.rep, &b.rep, p.rep, n);
 }
+
+#endif
+
+
+
 
 
 NTL_CLOSE_NNS

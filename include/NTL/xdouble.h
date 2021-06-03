@@ -33,14 +33,18 @@ double x;
 long e;
 
 xdouble() : x(0), e(0) { }
+explicit xdouble(double a) : x(0), e(0) { *this = a; }
 
 inline xdouble& operator=(double a);
 
-~xdouble() { }
+
 
 void normalize();
 
-static long oprec;
+static 
+NTL_CHEAP_THREAD_LOCAL 
+long oprec;
+
 static void SetOutputPrecision(long p);
 static long OutputPrecision() { return oprec; }
 
@@ -51,6 +55,9 @@ xdouble(double xx, long ee) : x(xx), e(ee) { } // internal use only
 
 };
 
+
+NTL_DECLARE_RELOCATABLE((xdouble*))
+
 inline xdouble to_xdouble(int a) { return xdouble(a, 0); }
 inline xdouble to_xdouble(long a) { return xdouble(a, 0); }
 inline xdouble to_xdouble(unsigned int a) { return xdouble(a, 0); }
@@ -58,7 +65,8 @@ inline xdouble to_xdouble(unsigned long a) { return xdouble(a, 0); }
 
 xdouble to_xdouble(double a);
 inline xdouble to_xdouble(float a) { return to_xdouble(double(a)); }
-xdouble to_xdouble(const char *a);
+inline xdouble to_xdouble(const char *a) 
+{ xdouble res; conv(res, a); return res; }
 
 
 inline xdouble& xdouble::operator=(double a)
@@ -215,7 +223,6 @@ inline void conv(xdouble& x, unsigned long a) { x = to_xdouble(a); }
 
 inline void conv(xdouble& x, float a) { x = to_xdouble(a); }
 inline void conv(xdouble& x, double a) { x = to_xdouble(a); }
-inline void conv(xdouble& x, const char *a) { x = to_xdouble(a); }
 
 
 
@@ -266,6 +273,10 @@ inline xdouble MulSub(const xdouble& a, const xdouble& b,
 
 double log(const xdouble& a);
 xdouble xexp(double x);
+
+
+inline xdouble exp(const xdouble& x) { return xexp(to_double(x)); }
+
 
 NTL_CLOSE_NNS
 

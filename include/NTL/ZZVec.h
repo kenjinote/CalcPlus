@@ -40,8 +40,8 @@ public:
    void SetSize(long n, long d);
    void kill();
 
-   ZZVec() { v = 0; len = 0; bsize = 0; }
-   ZZVec(long n, long d) { v = 0; len = 0; bsize = 0; SetSize(n, d); }
+   ZZVec() : v(0), len(0), bsize(0) { }
+   ZZVec(long n, long d) : v(0), len(0), bsize(0)  { SetSize(n, d); }
    ~ZZVec() { kill(); };
 
    ZZ* elts() { return v; }
@@ -50,11 +50,45 @@ public:
    ZZ& operator[](long i) { return v[i]; }
    const ZZ& operator[](long i) const { return v[i]; }
 
-   static void swap_impl(ZZVec& x, ZZVec& y);
+
+   void swap(ZZVec& x)
+   {
+      _ntl_swap(v, x.v);
+      _ntl_swap(len, x.len);
+      _ntl_swap(bsize, x.bsize);
+   }
+
+   void move(ZZVec& other) 
+   { 
+      ZZVec tmp;
+      tmp.swap(other);
+      tmp.swap(*this);
+   }
+
+
+#if (NTL_CXX_STANDARD >= 2011 && !defined(NTL_DISABLE_MOVE))
+
+   ZZVec(ZZVec&& other) noexcept : ZZVec() 
+   {
+      this->move(other);
+   }
+
+   ZZVec& operator=(ZZVec&& other) noexcept
+   {
+      this->move(other);
+      return *this;
+   }
+
+#endif
+
 
 };
 
-inline void swap(ZZVec& x, ZZVec& y) { ZZVec::swap_impl(x, y); }
+
+NTL_DECLARE_RELOCATABLE((ZZVec*))
+
+
+inline void swap(ZZVec& x, ZZVec& y) { x.swap(y); }
 
 NTL_CLOSE_NNS
 

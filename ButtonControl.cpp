@@ -1,4 +1,3 @@
-#define _WIN32_WINNT 0x0601
 #include <windows.h>
 #include "ButtonControl.h"
 #define SZCECOWIZBUTTONPROC TEXT("ButtonProc")
@@ -43,11 +42,11 @@ HWND ButtonControl::CreateButton(
 	m_hBmpDis = LoadBitmap(hInstance, MAKEINTRESOURCE(nDis));
 	m_nWidth = lpRect->right - lpRect->left;
 	m_nHeight = lpRect->bottom - lpRect->top;
-	const HWND hWnd = CreateWindowEx(0, L"BUTTON", lpszText, WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, lpRect->left, lpRect->top, m_nWidth, m_nHeight, hWndParent, hMenu, hInstance, NULL);
+	HWND hWnd = CreateWindowEx(0, L"BUTTON", lpszText, WS_CHILD | WS_VISIBLE | BS_OWNERDRAW, lpRect->left, lpRect->top, m_nWidth, m_nHeight, hWndParent, hMenu, hInstance, NULL);
 	if (!hWnd) return NULL;
-	SetClassLong(hWnd, GCL_STYLE, GetClassLong(hWnd, GCL_STYLE) & ~CS_DBLCLKS);
+	SetClassLongPtr(hWnd, GCL_STYLE, GetClassLongPtr(hWnd, GCL_STYLE) & ~CS_DBLCLKS);
 	SetProp(hWnd, SZCECOWIZBUTTONPROC, this); // ウィンドウハンドルのプロパテにオブジェクトのポインタを関連付ける
-	m_DefBtnProc = (WNDPROC)SetWindowLong(hWnd, GWL_WNDPROC, (LONG)GlobalButtonProc);
+	m_DefBtnProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)GlobalButtonProc);
 	return hWnd;
 }
 

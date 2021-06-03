@@ -69,7 +69,9 @@ berlekamp(const GF2EX& f, long verbose=0)
 // Uses "Berlekamp" appraoch.
 
 
-extern long GF2EX_BlockingFactor;
+extern 
+NTL_CHEAP_THREAD_LOCAL
+long GF2EX_BlockingFactor;
 // Controls GCD blocking for DDF.
 
 void DDF(vec_pair_GF2EX_long& factors, const GF2EX& f, const GF2EX& h,
@@ -84,13 +86,15 @@ inline vec_pair_GF2EX_long DDF(const GF2EX& f, const GF2EX& h,
 // Assumes f is monic and square-free,  and h  = X^p mod f
 // Obsolete: see NewDDF, below.
 
-extern long GF2EX_GCDTableSize; /* = 4 */
+extern 
+NTL_CHEAP_THREAD_LOCAL
+long GF2EX_GCDTableSize; /* = 4 */
 // Controls GCD blocking for NewDDF
 
-extern char GF2EX_stem[]; 
-// Determines filename stem for external storage in NewDDF.
 
-extern double GF2EXFileThresh; /* = 128 */
+extern 
+NTL_CHEAP_THREAD_LOCAL
+double GF2EXFileThresh; 
 // external files are used for baby/giant steps if size
 // of these tables exceeds GF2EXFileThresh KB.
 

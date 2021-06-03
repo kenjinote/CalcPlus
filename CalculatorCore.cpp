@@ -24,19 +24,14 @@ int get_token()
 	case TEXT('('):g_pbuf++; return TK_LPAREN;
 	case TEXT(')'):g_pbuf++; return TK_RPAREN;
 	default:
-#ifdef UNICODE
-	{
-		const int nSize = WideCharToMultiByte(CP_ACP, 0, g_pbuf, -1, NULL, 0, NULL, NULL);
-		LPSTR lpStr = (LPSTR)GlobalAlloc(GMEM_FIXED, nSize);
-		WideCharToMultiByte(CP_ACP, 0, g_pbuf, -1, lpStr, nSize, NULL, NULL);
-		g_value = to_RR(lpStr);
-		g_pbuf += strcspn(lpStr, "+-*/()^");
-		GlobalFree(lpStr);
-	}
-#else
-		g_value = to_RR(g_pbuf);
-		g_pbuf += strcspn(g_pbuf, TEXT("+-*/()^"));
-#endif
+		{
+			const int nSize = WideCharToMultiByte(CP_ACP, 0, g_pbuf, -1, NULL, 0, NULL, NULL);
+			LPSTR lpStr = (LPSTR)GlobalAlloc(GMEM_FIXED, nSize);
+			WideCharToMultiByte(CP_ACP, 0, g_pbuf, -1, lpStr, nSize, NULL, NULL);
+			g_value = to_RR(lpStr);
+			g_pbuf += strcspn(lpStr, "+-*/()^");
+			GlobalFree(lpStr);
+		}
 		return TK_CONST;
 	}
 }
@@ -183,7 +178,7 @@ LPTSTR RRtoString(const RR& r)
 		stream << r;
 		std::string result = stream.str();
 		trim(result);
-		const int nSize = result.size();
+		const int nSize = (int)result.size();
 		LPSTR lpszText = (LPSTR)GlobalAlloc(0, nSize + 1);
 		lstrcpyA(lpszText, result.c_str());
 
@@ -195,17 +190,6 @@ LPTSTR RRtoString(const RR& r)
 
 		return pwsz;
 	}
-
-	//RR num;
-	//num = abs(n);
-	//str[len--] = '\0';
-	//do
-	//{
-	//	str[len--] = '0' + (char)(num % 10);
-	//	num /= 10;
-	//}
-	//while (num != 0);
-	//if (n<0)str[0] = '-';
 }
 
 //
@@ -222,7 +206,7 @@ void Reset(LPTSTR *lpszText)
 //
 void AddText(LPTSTR *lpszText, LPTSTR lpszAddText)
 {
-	const DWORD dwSize = GlobalSize(*lpszText);
+	const DWORD dwSize = (DWORD)GlobalSize(*lpszText);
 	*lpszText = (LPTSTR)GlobalReAlloc(*lpszText, dwSize + sizeof(TCHAR)*lstrlen(lpszAddText), GMEM_MOVEABLE);
 	lstrcat(*lpszText, lpszAddText);
 }

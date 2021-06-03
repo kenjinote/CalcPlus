@@ -1,10 +1,19 @@
 #pragma once
 
+#ifdef _WIN64
 #ifdef _DEBUG
-#pragma comment(lib,"WinNTL-6_0_0_DEBUG")
+#pragma comment(lib,"x64\\Debug\\WinNTL-11_4_4")
 #else
-#pragma comment(lib,"WinNTL-6_0_0")
+#pragma comment(lib,"x64\\Release\\WinNTL-11_4_4")
 #endif
+#elif _WIN32
+#ifdef _DEBUG
+#pragma comment(lib,"Debug\\WinNTL-11_4_4")
+#else
+#pragma comment(lib,"Release\\WinNTL-11_4_4")
+#endif
+#endif
+
 
 #define NTL_NO_MIN_MAX
 #include<NTL/RR.h>

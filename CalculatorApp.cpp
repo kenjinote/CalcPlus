@@ -322,7 +322,7 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 
 		LPCREATESTRUCT pcs = (LPCREATESTRUCT)lParam;
 		CalculatorApp *pCalculatorApp = (CalculatorApp *)pcs->lpCreateParams;
-		SetWindowLongPtrW(hwnd, GWLP_USERDATA, PtrToUlong(pCalculatorApp));
+		SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)pCalculatorApp);
 
 		pCalculatorApp->m_lpszText = (LPTSTR)GlobalAlloc(GMEM_FIXED, sizeof(TCHAR)*(2));
 		pCalculatorApp->m_lpszText[0] = TEXT('0');
@@ -344,8 +344,6 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 		pCalculatorApp->m_Border1.CreateBorder(28, hwnd, ((LPCREATESTRUCT)(lParam))->hInstance);// button[i].szText, &button[i].rect, hwnd, (HMENU)button[i].id, ((LPCREATESTRUCT)(lParam))->hInstance, IDB_CLOSE_NORMAL, IDB_CLOSE_PRESS, IDB_CLOSE_CURSOR, IDB_CLOSE_NORMAL);
 		pCalculatorApp->m_Border2.CreateBorder(28 + 48, hwnd, ((LPCREATESTRUCT)(lParam))->hInstance);// button[i].szText, &button[i].rect, hwnd, (HMENU)button[i].id, ((LPCREATESTRUCT)(lParam))->hInstance, IDB_CLOSE_NORMAL, IDB_CLOSE_PRESS, IDB_CLOSE_CURSOR, IDB_CLOSE_NORMAL);
 
-		//SetTimer(hwnd, 0x1234, 1, NULL);
-
 		result = 1;
 	}
 	else
@@ -356,43 +354,6 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 		{
 			switch (message)
 			{
-				//case WM_TIMER:
-				//	{
-				//	//KillTimer(hwnd, 0x1234);
-				//		POINT point1;
-				//		GetCursorPos(&point1);
-				//		RECT rect;
-				//		GetWindowRect(hwnd, &rect);
-				//		POINT point2 = { (rect.right + rect.left)/2.0, (rect.bottom + rect.top)/2.0 };
-				//		const double dDistance= GetDis(&point1, &point2);
-				//		if (dDistance > rect.right - rect.left)
-				//		{
-				//			SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), (BYTE)128, LWA_COLORKEY | LWA_ALPHA);
-				//		}
-				//		else
-				//		{
-				//			SetLayeredWindowAttributes(hwnd, RGB(255, 0, 0), (BYTE)(256.0 - dDistance / (rect.right - rect.left) * 128.0), LWA_COLORKEY | LWA_ALPHA);
-				//		}
-				//		//SetTimer(hwnd, 0x1234, 1, NULL);
-				//	}
-				//	break;
-
-				//case WM_PRINTCLIENT:
-				//	//hdc = (HDC)wp;
-				//	//hBmp = (HBITMAP)LoadImage(hInst,
-				//	//	"MYBMP",
-				//	//	IMAGE_BITMAP,
-				//	//	0, 0,
-				//	//	LR_DEFAULTCOLOR);
-				//	//GetObject(hBmp, (int)sizeof(BITMAP), &bmp_info);
-				//	//wx = bmp_info.bmWidth;
-				//	//wy = bmp_info.bmHeight;
-				//	//hdc_mem = CreateCompatibleDC(hdc);
-				//	//SelectObject(hdc_mem, hBmp);
-				//	//BitBlt(hdc, 0, 0, wx, wy, hdc_mem, 0, 0, SRCCOPY);
-				//	//DeleteObject(hBmp);
-				//	//DeleteDC(hdc_mem);
-				//	break;
 			case WM_SIZE:
 			{
 				const UINT width = LOWORD(lParam);
@@ -543,7 +504,7 @@ LRESULT CALLBACK CalculatorApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, 
 				break;
 				case BUTTON_BACK:
 				{
-					const DWORD dwSize = GlobalSize(pCalculatorApp->m_lpszText);
+					const DWORD dwSize = (DWORD)GlobalSize(pCalculatorApp->m_lpszText);
 					if (pCalculatorApp->m_bError || pCalculatorApp->m_bEqualed || dwSize / sizeof(TCHAR) == 2)
 					{
 						pCalculatorApp->m_lpszText = (LPTSTR)GlobalReAlloc(pCalculatorApp->m_lpszText, sizeof(TCHAR) * 2, GMEM_MOVEABLE);
