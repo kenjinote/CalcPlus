@@ -1,3 +1,7 @@
+![image](https://user-images.githubusercontent.com/2605401/184374641-bc2665f5-6908-4851-a742-5931a50f83c8.png)
+
+
+
 Hello World Sample
 ===============================
 Draws the text, "Hello, World!".
@@ -20,8 +24,8 @@ Files
  
 Prerequisites
 ===============================
-Microsoft Windows® 7
-Windows® Software Development Kit (SDK) for Windows 7 and .NET Framework 3.5 Service Pack 1 
+Microsoft WindowsÂ® 7
+WindowsÂ® Software Development Kit (SDK) for Windows 7 and .NET Framework 3.5 Service Pack 1 
 
 
 Building the Sample
